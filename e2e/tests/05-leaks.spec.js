@@ -20,7 +20,17 @@ test("sesli odaya gir-çık döngüsünde sızıntı yok", async ({ page, contex
     await cdp.send("HeapProfiler.collectGarbage");
     await page.waitForTimeout(400);
     const m = Object.fromEntries((await cdp.send("Performance.getMetrics")).metrics.map((x) => [x.name, x.value]));
-    return { heapMB: +(m.JSHeapUsedSize / 1048576).toFixed(1), nodes: m.Nodes, listeners: m.JSEventListeners, docs: m.Documents };
+    // Bellekte HÂLÂ canlı nesne sayıları (çöp toplamadan sonra): kapanmış odalardan kalan bağlantı/iz/ses bağlamı
+    const count = async (expr) => {
+      const proto = await cdp.send("Runtime.evaluate", { expression: expr });
+      const objs = await cdp.send("Runtime.queryObjects", { prototypeObjectId: proto.result.objectId });
+      const r = await cdp.send("Runtime.callFunctionOn", { objectId: objs.objects.objectId, functionDeclaration: "function(){return this.length}", returnByValue: true });
+      return r.result.value;
+    };
+    const pcs = await count("RTCPeerConnection.prototype");
+    const tracks = await count("MediaStreamTrack.prototype");
+    const actx = await count("AudioContext.prototype");
+    return { heapMB: +(m.JSHeapUsedSize / 1048576).toFixed(1), nodes: m.Nodes, listeners: m.JSEventListeners, docs: m.Documents, pcs, tracks, actx };
   };
 
   const rows = [];
@@ -37,8 +47,8 @@ test("sesli odaya gir-çık döngüsünde sızıntı yok", async ({ page, contex
     }
     rows.push({ tur: i, ...(await measure()) });
   }
-  console.log("TUR | heapMB | düğüm | dinleyici | belge");
-  rows.forEach((r) => console.log(`${String(r.tur).padStart(3)} | ${r.heapMB} | ${r.nodes} | ${r.listeners} | ${r.docs}`));
+  console.log("TUR | heapMB | düğüm | dinleyici | belge | bağlantı(PC) | iz | AudioContext");
+  rows.forEach((r) => console.log(`${String(r.tur).padStart(3)} | ${r.heapMB} | ${r.nodes} | ${r.listeners} | ${r.docs} | ${r.pcs} | ${r.tracks} | ${r.actx}`));
   const a = rows[2], b = rows[N];
   console.log(`6 tur farkı: heap ${(b.heapMB - a.heapMB).toFixed(1)} MB, düğüm ${b.nodes - a.nodes}, dinleyici ${b.listeners - a.listeners}, belge ${b.docs - a.docs}`);
   console.log("HATALAR:", JSON.stringify([...new Set(errors)].slice(0, 8)));

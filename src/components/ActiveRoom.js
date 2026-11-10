@@ -70,6 +70,7 @@ import ModerationHandler from "./active-room/ModerationHandler";
 import WatchPartyManager from "./active-room/WatchPartyManager";
 import CallInviteModal from "@/src/components/friends/CallInviteModal";
 import OverlayBridge from "./active-room/OverlayBridge";
+import RoomPresencePublisher from "./active-room/RoomPresencePublisher";
 
 // --- STYLES ---
 // Styles moved to active-room/ActiveRoomStyles.js
@@ -1663,6 +1664,12 @@ export default function ActiveRoom({
       <MicGuardHandler serverMuted={serverMuted} serverDeafened={serverDeafened} />
       <CursorShareHandler />
       <VoiceGroupsHandler />
+      <RoomPresencePublisher
+        roomId={roomName}
+        channelName={roomDisplayName}
+        serverName={currentServerName}
+        isDMCall={isDMCall}
+      />
       <OverlayBridge
         channelName={roomDisplayName}
         serverName={currentServerName}

@@ -24,6 +24,7 @@ import { WelcomeScreen } from "@/src/components/layout";
 import SplashScreen from "@/src/components/SplashScreen";
 import ModalA11yManager from "@/src/components/ModalA11yManager";
 import VoiceConnectedBar from "@/src/components/layout/VoiceConnectedBar";
+import VoiceMiniWidget from "@/src/components/layout/VoiceMiniWidget";
 import { AppShell } from "@/src/components/layout";
 import ServerRail from "@/src/components/layout/ServerRail";
 import CreateServerModal from "@/src/components/server/CreateServerModal";
@@ -820,6 +821,11 @@ export default function Home() {
 
   // Sesli bağlantı kartı: oda ekranının DIŞINDAYKEN (Mesajlar, başka sunucu) bağlı olduğunu gösterir.
   // Aynı sunucudayken oda ekranı zaten görünür. DM aramaları kendi ekranında gösterilir, burada yok.
+  // Ana Sayfa: sunucu seçili değil, Mesajlar modu kapalı. Sesli odadayken de GERÇEK Ana Sayfa gösterilir
+  // (oda arkada bağlı kalır, ActiveRoom sökülmez); odadakiler küçük kutuda canlı görünür.
+  const isHomeView = !currentServer && !friendsMode;
+  const showMiniWidget = !!currentRoom && !currentRoom.isDM && isHomeView;
+
   const showVoiceBar =
     !!currentRoom && !currentRoom.isDM && (friendsMode || currentServer?.id !== currentRoom._serverId);
 
@@ -1057,7 +1063,13 @@ export default function Home() {
       <div className="flex-1 flex flex-col relative overflow-hidden h-full">
         {/* ActiveRoom her zaman mount, sadece visibility değişiyor */}
         <div
-          className={`absolute inset-0 ${currentRoom ? "z-10 opacity-100" : "z-0 opacity-0 pointer-events-none"}`}
+          ref={(el) => {
+            if (!el) return;
+            if (currentRoom && isHomeView) el.setAttribute("inert", "");
+            else el.removeAttribute("inert");
+          }}
+          aria-hidden={currentRoom && isHomeView ? "true" : undefined}
+          className={`absolute inset-0 ${currentRoom && !isHomeView ? "z-10 opacity-100" : "z-0 opacity-0 pointer-events-none"}`}
         >
           {currentRoom && (
             <ActiveRoom
@@ -1083,17 +1095,21 @@ export default function Home() {
           )}
         </div>
 
+        {showMiniWidget && (
+          <VoiceMiniWidget room={currentRoom} onReturn={handleReturnToRoom} onLeave={handleLeaveFromBar} />
+        )}
+
         {/* Welcome/Chat/Friends/DM screen */}
         <div
           // Gizliyken: Tab ile odaklanma ve ekran okuyucu bu katmana GİRMESİN (opacity-0 yalnızca görseli saklıyordu)
           ref={(el) => {
             if (!el) return;
-            const hidden = !!currentRoom && !(friendsMode && showFriendsPanel);
+            const hidden = !!currentRoom && !isHomeView && !(friendsMode && showFriendsPanel);
             if (hidden) el.setAttribute("inert", "");
             else el.removeAttribute("inert");
           }}
-          aria-hidden={!!currentRoom && !(friendsMode && showFriendsPanel) ? "true" : undefined}
-          className={`absolute inset-0 ${!currentRoom || (friendsMode && showFriendsPanel) ? "z-[60] bg-[#313338] opacity-100 pointer-events-auto" : "z-0 opacity-0 pointer-events-none"}`}
+          aria-hidden={!!currentRoom && !isHomeView && !(friendsMode && showFriendsPanel) ? "true" : undefined}
+          className={`absolute inset-0 ${!currentRoom || isHomeView || (friendsMode && showFriendsPanel) ? "z-[60] bg-[#313338] opacity-100 pointer-events-auto" : "z-0 opacity-0 pointer-events-none"}`}
         >
             {friendsMode ? (
               /* ✅ Friends Mode: Arkadaşlar / DM Conversation */

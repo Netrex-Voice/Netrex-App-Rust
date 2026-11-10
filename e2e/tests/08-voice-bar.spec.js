@@ -13,7 +13,7 @@ test("sesli bağlantı kartı", async ({ page, context, request }) => {
   await createServerViaUI(page, request, "Ikinci Sunucu");
 
   const bar = page.getByRole("region", { name: "Sesli bağlantı" });
-  const leaveBtn = page.getByRole("button", { name: "Bağlantıyı Kes" }); // odadaki alt çubuk
+  const leaveBtn = page.getByRole("button", { name: "Bağlantıyı Kes", exact: true }); // odadaki alt çubuk
 
   // Odaya gir
   await page.getByRole("button", { name: "Kart Testi" }).click();

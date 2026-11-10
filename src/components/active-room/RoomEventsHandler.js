@@ -467,7 +467,16 @@ export default function RoomEventsHandler({
       room.off(RoomEvent.TrackSubscribed, onTrackSubscribed);
       room.off(RoomEvent.MediaDevicesError, onMediaDevicesError);
       room.off(RoomEvent.SignalReconnecting, onSignalReconnecting);
-      
+
+      // livekit-client 2.16 HATASI: Room, 'freeze' dinleyicisini document'a EKLİYOR ama window'dan kaldırmaya çalışıyor
+      // (hedefler farklı) → dinleyici sonsuza dek kalır ve her odaya girişte bir Room nesnesi (tüm içeriğiyle) sızar.
+      // Ölçüldü: gir-çık başına +1 dinleyici + yavaş bellek artışı. Kütüphane düzelene kadar burada temizlenir.
+      try {
+        if (typeof document !== "undefined" && typeof room.onPageLeave === "function") {
+          document.removeEventListener("freeze", room.onPageLeave);
+        }
+      } catch (_) { /* temizlik başarısızsa sorun değil */ }
+
       clearTimeout(deviceChangeTimer);
       if (typeof navigator !== "undefined" && navigator.mediaDevices) {
         navigator.mediaDevices.removeEventListener('devicechange', onDeviceChange);
