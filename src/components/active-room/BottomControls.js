@@ -35,6 +35,9 @@ import { useSpatialAudioStore } from "@/src/store/spatialAudioStore";
 import { VoiceGroupsControl } from "./VoiceGroupsUI";
 import GamesButton from "@/src/modules/games/GamesButton";
 import ScreenShareModal from "../ScreenShareModal";
+
+// Ekran paylaşımı video codec'i ("h264" = GPU kodlayıcı; yedek: "vp8"). Ölçüm gerekçesi publishTrack'in yanında.
+const SCREEN_SHARE_CODEC = "h264";
 import TtsStopBadge from "../TtsStopBadge";
 function ControlButton({
   isActive,
@@ -530,10 +533,10 @@ export default function BottomControls({
       if (newState) {
         // Çözünürlük ayarlarını belirle
         const resolutionMap = {
-          "240p": { width: 426, height: 240, bitrate: 120000 },
-          "360p": { width: 640, height: 360, bitrate: 250000 },
-          "480p": { width: 854, height: 480, bitrate: 450000 },
-          "720p": { width: 1280, height: 720, bitrate: 750000 },
+          "240p": { width: 426, height: 240, bitrate: 150000 },
+          "360p": { width: 640, height: 360, bitrate: 300000 },
+          "480p": { width: 854, height: 480, bitrate: 550000 },
+          "720p": { width: 1280, height: 720, bitrate: 1000000 },
         };
         const selectedResolution = resolutionMap[videoResolution] || resolutionMap["720p"] || resolutionMap["480p"];
         const selectedFps = videoFrameRate || 18;
@@ -622,7 +625,8 @@ export default function BottomControls({
               maxBitrate: selectedResolution.bitrate,
               maxFramerate: selectedFps,
             },
-            videoCodec: videoCodec || "vp8",
+            videoCodec: videoCodec || "h264",
+            degradationPreference: "maintain-framerate",
             simulcast: false,
           });
         } catch (publishError) {
@@ -692,7 +696,8 @@ export default function BottomControls({
                     maxBitrate: selectedResolution.bitrate,
                     maxFramerate: selectedFps,
                   },
-                  videoCodec: "vp8",
+                  videoCodec: videoCodec || "h264",
+                  degradationPreference: "maintain-framerate",
                   simulcast: false,
                 }
               );
@@ -898,10 +903,10 @@ export default function BottomControls({
       }
 
       const resolutionMap = {
-        "240p": { width: 426, height: 240, bitrate: 120000 },
-        "360p": { width: 640, height: 360, bitrate: 250000 },
-        "480p": { width: 854, height: 480, bitrate: 450000 },
-        "720p": { width: 1280, height: 720, bitrate: 750000 },
+        "240p": { width: 426, height: 240, bitrate: 150000 },
+        "360p": { width: 640, height: 360, bitrate: 300000 },
+        "480p": { width: 854, height: 480, bitrate: 550000 },
+        "720p": { width: 1280, height: 720, bitrate: 1000000 },
       };
       const selectedResolution = resolutionMap[videoResolution] || resolutionMap["720p"] || resolutionMap["480p"];
       const selectedFps = videoFrameRate || 18;
@@ -924,7 +929,8 @@ export default function BottomControls({
             maxBitrate: selectedResolution.bitrate,
             maxFramerate: selectedFps,
           },
-          videoCodec: videoCodec || "vp8",
+          videoCodec: videoCodec || "h264",
+          degradationPreference: "maintain-framerate",
           simulcast: false,
         });
         if (publication?.track) {
@@ -986,10 +992,10 @@ export default function BottomControls({
       }
 
       const resolutionMap = {
-        "240p": { width: 426, height: 240, bitrate: 120000 },
-        "360p": { width: 640, height: 360, bitrate: 250000 },
-        "480p": { width: 854, height: 480, bitrate: 450000 },
-        "720p": { width: 1280, height: 720, bitrate: 750000 },
+        "240p": { width: 426, height: 240, bitrate: 150000 },
+        "360p": { width: 640, height: 360, bitrate: 300000 },
+        "480p": { width: 854, height: 480, bitrate: 550000 },
+        "720p": { width: 1280, height: 720, bitrate: 1000000 },
       };
       const selectedResolution = resolutionMap[videoResolution] || resolutionMap["720p"] || resolutionMap["480p"];
       const selectedFps = videoFrameRate || 18;
@@ -1028,7 +1034,8 @@ export default function BottomControls({
             maxBitrate: selectedResolution.bitrate,
             maxFramerate: selectedFps,
           },
-          videoCodec: videoCodec || "vp8",
+          videoCodec: videoCodec || "h264",
+          degradationPreference: "maintain-framerate",
           simulcast: false,
         });
         if (publication?.track) {
@@ -1182,20 +1189,29 @@ export default function BottomControls({
       videoTrack.contentHint = fps > 15 ? "motion" : "detail";
       
       // Çözünürlüğe ve FPS'ye göre bitrate ayarla (yüksek kalite için)
+      // 60 FPS bit hızı yükseltildi: ölçüm (720p60, hareketli içerik): 4 Mbps'te sınırlı kalıyordu, 6 Mbps'te
+      // 720p60 tutuluyor. Bunlar TAVAN değeri; bağlantı yetmezse LiveKit kendisi düşürür.
       const maxBitrate =
         resolution === 1440
-          ? 8000000
+          ? (fps >= 60 ? 12000000 : 8000000)
           : resolution === 1080
-          ? (fps > 30 ? 6000000 : 5000000)
+          ? (fps >= 60 ? 9000000 : fps > 30 ? 6000000 : 5000000)
           : resolution === 720
-          ? (fps >= 60 ? 4000000 : 2500000)
+          ? (fps >= 60 ? 6000000 : 2500000)
           : 1500000;
 
+      // Codec: H.264. Donanım (GPU) kodlayıcısı var (NVIDIA/AMD/Intel), yoksa yazılıma düşer; VP8 yalnızca
+      // işlemcide kodlanıyordu ve zayıf bağlantıda FPS'i çökertiyordu. Ölçüm (720p60, 1.5 Mbps): H.264 59 FPS,
+      // VP8 "dengeli" modda 10 FPS. Tek yerden değiştirilebilir: SCREEN_SHARE_CODEC.
+      // Bozulma tercihi: LiveKit ekran paylaşımında varsayılan "maintain-resolution" (netliği koru) kullanır:
+      // bağlantı/işlemci yetmeyince FPS'i düşürür (60 seçilse bile ~35 FPS ölçüldü). Kullanıcı yüksek FPS
+      // seçtiyse (>=45) akıcılık korunur; düşük FPS (belge/ders paylaşımı) seçtiyse netlik korunur.
       await localParticipant.publishTrack(videoTrack, {
         name: "screen_share_video",
         source: Track.Source.ScreenShare,
-        videoCodec: "vp8",
+        videoCodec: SCREEN_SHARE_CODEC,
         simulcast: false,
+        degradationPreference: fps >= 45 ? "maintain-framerate" : "maintain-resolution",
         videoEncoding: { maxBitrate, maxFramerate: fps },
       });
 

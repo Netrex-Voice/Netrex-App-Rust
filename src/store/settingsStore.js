@@ -96,7 +96,7 @@ export const useSettingsStore = create(
       graphicsQuality: "low", // "high" | "low" | "potato" - Varsayılan: Düşük
       disableAnimations: false, // Animasyonları tamamen kapat
       disableBackgroundEffects: false, // Arka plan efektlerini kapat
-      videoCodec: "vp8", // "vp8" | "h264" | "av1"
+      videoCodec: "h264", // "h264" (varsayılan, GPU kodlayıcı) | "vp8" | "av1"
 
       // Kamera
       cameraMirrorEffect: true, // Ayna efekti
@@ -427,7 +427,7 @@ export const useSettingsStore = create(
     }),
     {
       name: "netrex-user-settings",
-      version: 4,
+      version: 5,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => Object.fromEntries(
         Object.entries(state).filter(
@@ -435,6 +435,11 @@ export const useSettingsStore = create(
         )
       ),
       migrate: (persistedState, version) => {
+        // v5: kamera varsayılan codec'i VP8 → H.264 (GPU kodlayıcı; ölçüm: zayıf bağlantıda FPS'i çökertmiyor).
+        // Eski varsayılan olan VP8 kayıtlarını taşı; bilerek AV1 seçenler korunur.
+        if (version < 5 && persistedState && persistedState.videoCodec === "vp8") {
+          persistedState = { ...persistedState, videoCodec: "h264" };
+        }
         // v3: ses işlemcisi yeniden yazıldı; herkes noise gate'i %5 ile başlasın (sonra istediği değere çekebilir)
         if (version < 3) {
           persistedState = { ...persistedState, voiceThreshold: 5 };

@@ -12,7 +12,7 @@ export default function VideoCodecSection() {
       icon={<Cpu size={14} className="text-blue-400" />}
       iconBg="bg-blue-500/20"
       title="Video Kodlama (Codec)"
-      description="Kameranızın görüntüsünün nasıl sıkıştırılıp gönderileceği. Emin değilseniz VP8'de bırakın, her cihazla çalışır."
+      description="Kameranızın görüntüsünün nasıl sıkıştırılıp gönderileceği. H.264 ekran kartınızla (GPU) kodlandığı için işlemciyi yormaz ve zayıf bağlantıda akıcılığı korur; ekran kartı yoksa kendiliğinden yazılıma düşer."
       className="mb-4"
     >
       <SettingRow hoverBorder="hover:border-blue-500/20">
@@ -22,8 +22,8 @@ export default function VideoCodecSection() {
           onChange={(e) => setVideoCodec(e.target.value)}
           className="w-full bg-[#2b2d31] border border-white/10 text-white p-3 rounded-xl hover:border-blue-500/50 focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 outline-none appearance-none cursor-pointer transition-all duration-300"
         >
-          <option value="vp8">VP8 (Varsayılan - En Uyumlu)</option>
-          <option value="h264">H.264 (Donanım Hızlandırma)</option>
+          <option value="h264">H.264 (Varsayılan - GPU ile hızlandırılır)</option>
+          <option value="vp8">VP8 (Yedek - işlemcide kodlanır)</option>
           <option value="av1">AV1 (Yeni Nesil - Yüksek Sıkıştırma)</option>
         </select>
       </SettingRow>
