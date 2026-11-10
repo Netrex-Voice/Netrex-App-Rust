@@ -63,7 +63,7 @@ pub fn run() {
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(lifecycle::window_state_flags())
-                .with_denylist(&["splash", "exit-splash", "pointer-overlay", "ticker-overlay", "voice-overlay"])
+                .with_denylist(&["pointer-overlay", "ticker-overlay", "voice-overlay"])
                 .build(),
         )
         .setup(|app| {

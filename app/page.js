@@ -538,16 +538,16 @@ export default function Home() {
 
   useEffect(() => {
     if (!isLoading && showSplash) {
-      // Tauri: yerel splash penceresi zaten gösterildi → uygulama içi ikinci splash'ın bekleme
-      // süresine gerek yok (ana pencere o sırada gizli yükleniyor).
+      // Tauri: ana pencere hazır olana kadar GİZLİ (splash yok) → uygulama içi splash'ın bekleme süresine
+      // gerek yok, yükleme biter bitmez geçilir.
       const delay = window.netrex?.isTauri ? 0 : 1500;
       const timer = setTimeout(() => setShowSplash(false), delay);
       return () => clearTimeout(timer);
     }
   }, [isLoading, showSplash]);
 
-  // Tauri: ana pencere (gizli) hazır olunca yerel splash'ı kapatıp pencereyi göster.
-  // Böylece uygulama, açılırken beklemeden doğrudan hazır hâlde ekrana gelir.
+  // Tauri: ana pencere (gizli) hazır olunca pencereyi göster. Splash yok: uygulama, açılırken
+  // beklemeden doğrudan hazır hâlde (gri/boş ekran olmadan) ekrana gelir.
   useEffect(() => {
     if (isLoading || showSplash) return;
     if (!window.netrex?.isTauri || !window.netrex.notifySplashComplete) return;

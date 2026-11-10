@@ -1,6 +1,6 @@
 //! Pencere yaşam döngüsü (Faz 1).
 //!
-//! Electron karşılıkları: `windowManager.js` (splash, ana pencere, kapatma
+//! Electron karşılıkları: `windowManager.js` (ana pencere, kapatma
 //! davranışı, pencere durumu olayları), `trayManager.js`, `main.js` (graceful exit).
 
 use crate::store::Store;
@@ -14,9 +14,7 @@ use std::{
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    window::Color,
-    AppHandle, Emitter, Manager, Monitor, PhysicalPosition, RunEvent, WebviewUrl, WebviewWindow,
-    WebviewWindowBuilder, WindowEvent,
+    AppHandle, Emitter, Manager, RunEvent, WebviewWindow, WindowEvent,
 };
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
@@ -47,7 +45,7 @@ pub(crate) fn trace(app: &AppHandle, msg: &str) {
 /// `tauri.conf.json` içindeki `additionalBrowserArgs` ile aynı olduğu testle denetlenir.
 pub const WEBVIEW2_BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --autoplay-policy=no-user-gesture-required";
 
-/// Hatırlanacak pencere özellikleri. VISIBLE bilerek yok: gösterme kararı splash akışında.
+/// Hatırlanacak pencere özellikleri. VISIBLE bilerek yok: pencere, sayfa hazır olunca (`splash_complete`) gösterilir.
 pub fn window_state_flags() -> StateFlags {
     StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED | StateFlags::FULLSCREEN
 }
@@ -77,14 +75,12 @@ fn schedule_window_state_save(app: &AppHandle) {
     });
 }
 
-/// Splash en az bu kadar görünür (animasyon yanıp sönmesin), renderer erken hazır olsa bile.
-const SPLASH_MIN: Duration = Duration::from_millis(1200);
-/// Renderer hiç `splash-complete` göndermezse (ağ yavaş, hata) ana pencere bu süre sonra yine de gösterilir.
-const SPLASH_MAX: Duration = Duration::from_secs(10);
+/// Renderer hiç `splash-complete` (ana pencere hazır) göndermezse (ağ yavaş, hata) pencere bu süre sonra yine de gösterilir.
+const SHOW_TIMEOUT: Duration = Duration::from_secs(8);
 /// Renderer temizliği bitirmezse beklenecek en fazla süre (Electron: 3 sn).
 const CLEANUP_TIMEOUT: Duration = Duration::from_secs(3);
-/// Çıkış splash'ının ekranda kalma süresi (Electron: 2,5 sn).
-const EXIT_SPLASH_TIME: Duration = Duration::from_millis(2500);
+/// Sürecin başladığı an: açılışın ne kadar sürdüğünü günlüğe yazmak için.
+static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
 
 #[derive(Default)]
 pub struct LifecycleState {
@@ -96,8 +92,6 @@ pub struct LifecycleState {
     exit_allowed: AtomicBool,
     /// Önceki Resized olayındaki küçültülmüş durum (minimize/restore ayrımı için).
     was_minimized: AtomicBool,
-    /// Splash'ın açıldığı an (en az görünme süresi için)
-    splash_started: Mutex<Option<std::time::Instant>>,
     /// Pencere durumu kaydı için debounce sayacı.
     save_generation: std::sync::atomic::AtomicU64,
     /// Renderer'ın `cleanup-complete` sinyalini bekleyen kanal.
@@ -106,27 +100,7 @@ pub struct LifecycleState {
 
 // ---------------------------------------------------------------- pencereler
 
-/// Pencereyi verilen monitörün tam ortasına koyar. Önce hedef monitöre taşınır
-/// (DPI ölçeği o monitöre göre oturur), sonra gerçek dış boyuta göre ortalanır.
-fn center_on_monitor(win: &WebviewWindow, mon: &Monitor) {
-    let mp = mon.position();
-    let ms = mon.size();
-    let _ = win.set_position(PhysicalPosition::new(mp.x, mp.y));
-    if let Ok(sz) = win.outer_size() {
-        let x = mp.x + (ms.width as i32 - sz.width as i32) / 2;
-        let y = mp.y + (ms.height as i32 - sz.height as i32) / 2;
-        let _ = win.set_position(PhysicalPosition::new(x, y));
-    }
-}
 
-/// Ana pencerenin (geri yüklenmiş konumuyla) bulunduğu monitör.
-fn main_monitor(app: &AppHandle) -> Option<Monitor> {
-    app.get_webview_window("main")
-        .and_then(|w| w.current_monitor().ok().flatten())
-}
-
-/// Kayıtlı konum artık geçerli değilse (monitör çıkarılmış, çözünürlük değişmiş,
-/// başlık çubuğu ekran dışında kalmış) pencereyi ortala.
 fn ensure_main_on_screen(main: &WebviewWindow) {
     let on_screen = match (main.outer_position(), main.available_monitors()) {
         (Ok(p), Ok(mons)) => mons.iter().any(|m| {
@@ -144,68 +118,15 @@ fn ensure_main_on_screen(main: &WebviewWindow) {
     }
 }
 
-fn splash_window(
-    app: &AppHandle,
-    label: &str,
-    page: &str,
-    w: f64,
-    h: f64,
-    bg: (u8, u8, u8),
-    always_on_top: bool,
-) -> tauri::Result<WebviewWindow> {
-    let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(page.into()))
-        .title("Netrex")
-        .inner_size(w, h)
-        .decorations(false)
-        .resizable(false)
-        .maximizable(false)
-        .minimizable(false)
-        .always_on_top(always_on_top)
-        .skip_taskbar(always_on_top)
-        .background_color(Color(bg.0, bg.1, bg.2, 255))
-        .visible(false); // konumlandıktan sonra göster: yanlış monitörde "parlama" olmasın
-    #[cfg(windows)]
-    let builder = builder.additional_browser_args(WEBVIEW2_BROWSER_ARGS);
-    let win = builder.build()?;
-    crate::webview_lock::lock_down(&win);
-    // Ana pencerenin açılacağı monitörün ortası; bilinmiyorsa birincil monitör.
-    match main_monitor(app) {
-        Some(mon) => center_on_monitor(&win, &mon),
-        None => {
-            let _ = win.center();
-        }
-    }
-    win.show()?;
-    Ok(win)
-}
-
-fn create_splash(app: &AppHandle) {
-    let _ = splash_window(app, "splash", "native/splash.html", 360.0, 480.0, (15, 15, 17), false);
-}
-
-fn create_exit_splash(app: &AppHandle) {
-    if app.get_webview_window("exit-splash").is_none() {
-        match splash_window(
-            app,
-            "exit-splash",
-            "native/exit-splash.html",
-            320.0,
-            400.0,
-            (10, 10, 15),
-            true,
-        ) {
-            Ok(_) => trace(app, "exit-splash: oluşturuldu"),
-            Err(e) => trace(app, &format!("exit-splash: HATA {e}")),
-        }
-    }
-}
-
-/// Splash'ı kapatıp ana pencereyi gösterir (Electron: `showMainWindow`).
+/// Ana pencereyi gösterir (Electron: `showMainWindow`). Açılışta splash YOK: pencere, sayfa tamamen hazır olana
+/// kadar gizli tutulur (yoksa gri/boş ekran görünürdü) ve hazır olunca bir anda açılır.
 pub fn show_main(app: &AppHandle) {
-    if let Some(s) = app.get_webview_window("splash") {
-        let _ = s.destroy();
-    }
     if let Some(w) = app.get_webview_window("main") {
+        if !w.is_visible().unwrap_or(true) {
+            if let Some(t0) = START.get() {
+                trace(app, &format!("açılış: ana pencere gösterildi ({} ms)", t0.elapsed().as_millis()));
+            }
+        }
         if w.is_minimized().unwrap_or(false) {
             let _ = w.unminimize();
         }
@@ -317,9 +238,7 @@ fn create_tray(app: &AppHandle) -> tauri::Result<()> {
 // ------------------------------------------------------------- kurulum / çıkış
 
 pub fn setup(app: &AppHandle) -> tauri::Result<()> {
-    let check_updates = app
-        .state::<Store>()
-        .get_bool("checkUpdatesOnStartup", true);
+    let _ = START.set(std::time::Instant::now());
 
     if let Some(main) = app.get_webview_window("main") {
         // window-state eklentisi konum/boyut/tam ekranı bu noktadan önce geri yükledi.
@@ -330,26 +249,19 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
     }
     create_tray(app)?;
 
-    if check_updates {
-        create_splash(app);
-        if let Ok(mut t) = app.state::<LifecycleState>().splash_started.lock() {
-            *t = Some(std::time::Instant::now());
+    // Pencere gizli yüklenir; sayfa hazır olunca `splash_complete` ile açılır. Hiç gelmezse güvenlik zamanlayıcısı açar.
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(SHOW_TIMEOUT);
+        let visible = handle
+            .get_webview_window("main")
+            .and_then(|w| w.is_visible().ok())
+            .unwrap_or(true);
+        if !visible {
+            trace(&handle, "açılış: sayfa hazır sinyali gelmedi, zaman aşımıyla gösteriliyor");
+            show_main(&handle);
         }
-        // Üst sınır: renderer splash-complete göndermezse yine de göster.
-        let handle = app.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(SPLASH_MAX);
-            let visible = handle
-                .get_webview_window("main")
-                .and_then(|w| w.is_visible().ok())
-                .unwrap_or(true);
-            if !visible {
-                show_main(&handle);
-            }
-        });
-    } else {
-        show_main(app);
-    }
+    });
     Ok(())
 }
 
@@ -383,7 +295,7 @@ pub(crate) fn renderer_cleanup(app: &AppHandle) -> bool {
     rx.recv_timeout(CLEANUP_TIMEOUT).is_ok()
 }
 
-/// Electron `before-quit`: renderer'a temizlik yaptır → exit splash → çık.
+/// Electron `before-quit`: renderer'a temizlik yaptır → pencereyi gizle → hemen çık (çıkış ekranı yok).
 fn graceful_exit(app: AppHandle) {
     std::thread::spawn(move || {
         let t0 = std::time::Instant::now();
@@ -398,12 +310,11 @@ fn graceful_exit(app: AppHandle) {
             ),
         );
 
+        // Çıkış ekranı YOK: temizlik bitince pencere kapanır ve süreç hemen sonlanır.
         crate::overlay::shutdown(&app);
-        create_exit_splash(&app);
         if let Some(w) = app.get_webview_window("main") {
             let _ = w.hide();
         }
-        std::thread::sleep(EXIT_SPLASH_TIME);
 
         trace(&app, "graceful_exit: çıkılıyor");
         app.state::<LifecycleState>().exit_allowed.store(true, SeqCst);
@@ -413,25 +324,10 @@ fn graceful_exit(app: AppHandle) {
 
 // ------------------------------------------------------------------ komutlar
 
-/// Renderer "ana pencere hazır" dediğinde çağrılır: splash en az `SPLASH_MIN` görünsün, sonra ana pencere açılsın.
+/// Renderer "ana pencere hazır" dediğinde çağrılır: bekletmeden hemen gösterilir (splash yok).
 #[tauri::command]
-pub fn splash_complete(app: AppHandle, state: tauri::State<'_, LifecycleState>) {
-    let remaining = state
-        .splash_started
-        .lock()
-        .ok()
-        .and_then(|t| *t)
-        .map(|t0| SPLASH_MIN.saturating_sub(t0.elapsed()))
-        .unwrap_or(Duration::ZERO);
-    if remaining.is_zero() {
-        show_main(&app);
-    } else {
-        // Komut thread'ini (ana thread) bloklamadan kalan süreyi bekle
-        std::thread::spawn(move || {
-            std::thread::sleep(remaining);
-            show_main(&app);
-        });
-    }
+pub fn splash_complete(app: AppHandle) {
+    show_main(&app);
 }
 
 #[tauri::command]
