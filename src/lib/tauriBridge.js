@@ -473,6 +473,36 @@ function notifyNewPointerRequests(payload) {
   } catch (_) { /* bildirim yalnızca bir kolaylık */ }
 }
 
+/**
+ * Sunucu (Vercel, `server/` klasörü): LiveKit token ve Cloudinary silme. Secret'lar yalnızca orada durur.
+ * Adres derleme zamanında `NEXT_PUBLIC_NETREX_API_URL` ile verilir. TANIMSIZSA uygulama eski yerel yola
+ * (Rust, gömülü anahtarlar) düşer: sunucu hazır olana kadar hiçbir şey kırılmaz.
+ */
+const API_URL = (process.env.NEXT_PUBLIC_NETREX_API_URL || "").replace(/\/+$/, "");
+
+/** Firebase girişinin güncel ID token'ı (süresi dolmuşsa SDK kendiliğinden yeniler). */
+async function firebaseIdToken() {
+  const { auth } = await import("@/src/lib/firebase");
+  const user = auth.currentUser;
+  if (!user) throw new Error("Giriş yapılmamış");
+  return user.getIdToken();
+}
+
+/** Sunucuya kimlikli istek; hata gövdesindeki mesajı fırlatır. */
+async function apiCall(path, { method = "GET", body } = {}) {
+  const res = await fetch(`${API_URL}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${await firebaseIdToken()}`,
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Sunucu hatası (${res.status})`);
+  return data;
+}
+
 let inputListenerRefs = 0;
 
 function buildBridge() {
@@ -499,9 +529,14 @@ function buildBridge() {
     onRawKeydown: rawKeydownFromAnySource,
 
     // --- LIVEKIT ---
-    getLiveKitToken: (room, identity, displayName, serverIndex = 0) =>
-      invoke("get_livekit_token", { room, identity, displayName, serverIndex }),
-    getLiveKitServerInfo: (serverIndex = 0) => invoke("get_livekit_server_info", { serverIndex }),
+    getLiveKitToken: API_URL
+      ? async (room, identity, displayName, serverIndex = 0) =>
+          (await apiCall("/api/livekit-token", { method: "POST", body: { room, identity, displayName, serverIndex } })).token
+      : (room, identity, displayName, serverIndex = 0) =>
+          invoke("get_livekit_token", { room, identity, displayName, serverIndex }),
+    getLiveKitServerInfo: API_URL
+      ? (serverIndex = 0) => apiCall(`/api/livekit-server-info?serverIndex=${encodeURIComponent(serverIndex)}`)
+      : (serverIndex = 0) => invoke("get_livekit_server_info", { serverIndex }),
 
     // --- UTILS ---
     openExternalLink: (url) => invoke("open_external_link", { url }),
@@ -615,7 +650,9 @@ function buildBridge() {
     // Dönüş: { ok: true, title, tracks, truncated } | { ok: false, error }  (Electron ile aynı)
     fetchYouTubePlaylist: (listId) => invoke("fetch_youtube_playlist", { listId }),
     // Cloudinary resim silme (Electron'da /api route'u olmadığı için hiç çalışmıyordu)
-    deleteCloudinaryImage: (publicId) => invoke("cloudinary_delete", { publicId }),
+    deleteCloudinaryImage: API_URL
+      ? (publicId) => apiCall("/api/cloudinary-delete", { method: "POST", body: { public_id: publicId } })
+      : (publicId) => invoke("cloudinary_delete", { publicId }),
 
     // --- VOICE OVERLAY ---
     updateVoiceOverlay: (data) => send("update_voice_overlay", { data }),
