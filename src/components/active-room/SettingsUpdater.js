@@ -172,10 +172,10 @@ export default function SettingsUpdater({ isMuted, serverMuted, isDeafened, serv
 
             // Çözünürlük ayarlarını belirle (kullanıcı ayarlarına göre)
             const resolutionMap = {
-              "240p": { width: 426, height: 240, bitrate: 150000 },
-              "360p": { width: 640, height: 360, bitrate: 300000 },
-              "480p": { width: 854, height: 480, bitrate: 550000 },
-              "720p": { width: 1280, height: 720, bitrate: 1000000 },
+              "240p": { width: 426, height: 240, bitrate: 120000 },
+              "360p": { width: 640, height: 360, bitrate: 250000 },
+              "480p": { width: 854, height: 480, bitrate: 450000 },
+              "720p": { width: 1280, height: 720, bitrate: 750000 },
             };
             const selectedResolution = resolutionMap[videoResolution] || resolutionMap["720p"] || resolutionMap["480p"];
             const selectedFps = videoFrameRate || 18;

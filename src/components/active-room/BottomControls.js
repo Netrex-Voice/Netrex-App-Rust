@@ -533,10 +533,10 @@ export default function BottomControls({
       if (newState) {
         // Çözünürlük ayarlarını belirle
         const resolutionMap = {
-          "240p": { width: 426, height: 240, bitrate: 150000 },
-          "360p": { width: 640, height: 360, bitrate: 300000 },
-          "480p": { width: 854, height: 480, bitrate: 550000 },
-          "720p": { width: 1280, height: 720, bitrate: 1000000 },
+          "240p": { width: 426, height: 240, bitrate: 120000 },
+          "360p": { width: 640, height: 360, bitrate: 250000 },
+          "480p": { width: 854, height: 480, bitrate: 450000 },
+          "720p": { width: 1280, height: 720, bitrate: 750000 },
         };
         const selectedResolution = resolutionMap[videoResolution] || resolutionMap["720p"] || resolutionMap["480p"];
         const selectedFps = videoFrameRate || 18;
@@ -903,10 +903,10 @@ export default function BottomControls({
       }
 
       const resolutionMap = {
-        "240p": { width: 426, height: 240, bitrate: 150000 },
-        "360p": { width: 640, height: 360, bitrate: 300000 },
-        "480p": { width: 854, height: 480, bitrate: 550000 },
-        "720p": { width: 1280, height: 720, bitrate: 1000000 },
+        "240p": { width: 426, height: 240, bitrate: 120000 },
+        "360p": { width: 640, height: 360, bitrate: 250000 },
+        "480p": { width: 854, height: 480, bitrate: 450000 },
+        "720p": { width: 1280, height: 720, bitrate: 750000 },
       };
       const selectedResolution = resolutionMap[videoResolution] || resolutionMap["720p"] || resolutionMap["480p"];
       const selectedFps = videoFrameRate || 18;
@@ -992,10 +992,10 @@ export default function BottomControls({
       }
 
       const resolutionMap = {
-        "240p": { width: 426, height: 240, bitrate: 150000 },
-        "360p": { width: 640, height: 360, bitrate: 300000 },
-        "480p": { width: 854, height: 480, bitrate: 550000 },
-        "720p": { width: 1280, height: 720, bitrate: 1000000 },
+        "240p": { width: 426, height: 240, bitrate: 120000 },
+        "360p": { width: 640, height: 360, bitrate: 250000 },
+        "480p": { width: 854, height: 480, bitrate: 450000 },
+        "720p": { width: 1280, height: 720, bitrate: 750000 },
       };
       const selectedResolution = resolutionMap[videoResolution] || resolutionMap["720p"] || resolutionMap["480p"];
       const selectedFps = videoFrameRate || 18;
@@ -1189,15 +1189,16 @@ export default function BottomControls({
       videoTrack.contentHint = fps > 15 ? "motion" : "detail";
       
       // Çözünürlüğe ve FPS'ye göre bitrate ayarla (yüksek kalite için)
-      // 60 FPS bit hızı yükseltildi: ölçüm (720p60, hareketli içerik): 4 Mbps'te sınırlı kalıyordu, 6 Mbps'te
-      // 720p60 tutuluyor. Bunlar TAVAN değeri; bağlantı yetmezse LiveKit kendisi düşürür.
+      // Bit hızı TAVANLARI (kota için artırılmadı; eski değerler). Bağlantı yetmezse LiveKit kendisi düşürür.
+      // Ölçüm (720p60, çok hareketli içerik): H.264 + "akıcılığı koru" ile 4 Mbps'te 57-59 FPS tutuluyor, tavan
+      // aşılınca bit hızı değil ÇÖZÜNÜRLÜK düşüyor.
       const maxBitrate =
         resolution === 1440
-          ? (fps >= 60 ? 12000000 : 8000000)
+          ? 8000000
           : resolution === 1080
-          ? (fps >= 60 ? 9000000 : fps > 30 ? 6000000 : 5000000)
+          ? (fps > 30 ? 6000000 : 5000000)
           : resolution === 720
-          ? (fps >= 60 ? 6000000 : 2500000)
+          ? (fps >= 60 ? 4000000 : 2500000)
           : 1500000;
 
       // Codec: H.264. Donanım (GPU) kodlayıcısı var (NVIDIA/AMD/Intel), yoksa yazılıma düşer; VP8 yalnızca
