@@ -1,8 +1,8 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { initializeFirestore, getFirestore, memoryLocalCache } from "firebase/firestore";
+import { getAuth, connectAuthEmulator } from "firebase/auth";
+import { initializeFirestore, getFirestore, memoryLocalCache, connectFirestoreEmulator } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import { getDatabase } from "firebase/database";
+import { getDatabase, connectDatabaseEmulator } from "firebase/database";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -36,5 +36,17 @@ try {
 
 const storage = getStorage(app);
 const rtdb = getDatabase(app);
+
+// Otomatik testler (e2e/): yerel Firebase emülatörlerine bağlan. Yalnızca derleme zamanında
+// NEXT_PUBLIC_USE_EMULATORS=1 verilirse çalışır; üretim derlemesinde bu değişken YOKTUR, hiçbir etkisi olmaz.
+if (process.env.NEXT_PUBLIC_USE_EMULATORS === "1") {
+  try {
+    connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+    connectFirestoreEmulator(db, "127.0.0.1", 8080);
+    connectDatabaseEmulator(rtdb, "127.0.0.1", 9000);
+  } catch (_) {
+    // Hot-reload: zaten bağlanmış
+  }
+}
 
 export { auth, db, storage, rtdb };

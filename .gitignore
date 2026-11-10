@@ -54,3 +54,11 @@ Netrex-Portable/
 _reference/
 *.log
 .claude/
+
+# Test araçları ve çıktıları (taşınabilir JDK, LiveKit sunucusu, Playwright raporları)
+tools/
+e2e/.output/
+test-results/
+playwright-report/
+.firebase/
+*-debug.log

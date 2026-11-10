@@ -123,7 +123,10 @@ const RailItem = memo(function RailItem({
         delay={150}
       >
         <button
+          type="button"
           onClick={onClick}
+          aria-label={label}
+          aria-current={active ? "page" : undefined}
           className={`
             relative
             w-12 h-12 
