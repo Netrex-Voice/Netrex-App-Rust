@@ -70,7 +70,7 @@ export default function ShortcutHelpModal({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   const modalContent = (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[99999] flex items-center justify-center p-4 animate-fadeIn">
+    <div role="dialog" aria-modal="true" aria-label="Klavye kısayolları" data-esc-close className="fixed inset-0 bg-black/60 backdrop-blur-md z-[99999] flex items-center justify-center p-4 animate-fadeIn">
       {/* Animated background gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-transparent pointer-events-none"></div>
       

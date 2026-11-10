@@ -223,9 +223,9 @@ export default function UserProfileModal({ member, position, onClose }) {
   if (!member) return null;
 
   const modalContent = (
-    <div className="fixed inset-0 z-[99999] pointer-events-none flex items-center justify-center sm:block">
+    <div role="dialog" aria-modal="true" aria-label="Kullanıcı profili" className="fixed inset-0 z-[99999] pointer-events-none flex items-center justify-center sm:block">
       {/* Mobile Backdrop */}
-      <div 
+      <div role="dialog" aria-modal="true" aria-label="Kullanıcı profili" 
         className="fixed inset-0 bg-black/50 backdrop-blur-sm pointer-events-auto sm:hidden animate-fade-in" 
         onClick={onClose}
       />

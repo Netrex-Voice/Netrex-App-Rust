@@ -404,7 +404,7 @@ export default function ImageCropModal({
   const fillPct = ((zoom - 1) / 3) * 100;
 
   return createPortal(
-    <div className="fixed inset-0 z-[10100] flex items-center justify-center p-4">
+    <div role="dialog" aria-modal="true" aria-label="Resmi kırp" data-esc-close className="fixed inset-0 z-[10100] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/90 backdrop-blur-md"
@@ -452,7 +452,7 @@ export default function ImageCropModal({
               </h3>
             </div>
           </div>
-          <button
+          <button aria-label="Kapat"
             onClick={onClose}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white/70 hover:bg-white/6 transition-all duration-150 bg-red-600/30 hover:bg-red-700/30"
           >
@@ -588,7 +588,7 @@ export default function ImageCropModal({
               </span>
             </div>
             {/* Reset */}
-            <button
+            <button aria-label="Sıfırla"
               onClick={handleReset}
               className="flex items-center justify-center gap-1 px-4 py-2 rounded-xl text-[11px] font-bold text-[#ffffff] hover:text-[#ededed] transition-all duration-200"
               style={{
@@ -603,7 +603,7 @@ export default function ImageCropModal({
 
         {/* Footer */}
         <div className="px-5 pb-5 flex items-center justify-between gap-3">
-          <button
+          <button aria-label="Uygula"
             onClick={handleSave}
             disabled={isSaving || !imgLoaded}
             className="flex-1 py-2.5 px-4 rounded-xl text-[13px] font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200"

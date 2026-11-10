@@ -22,6 +22,7 @@ import { WelcomeScreen } from "@/src/components/layout";
 
 // Splash Screen
 import SplashScreen from "@/src/components/SplashScreen";
+import ModalA11yManager from "@/src/components/ModalA11yManager";
 import { AppShell } from "@/src/components/layout";
 import ServerRail from "@/src/components/layout/ServerRail";
 import CreateServerModal from "@/src/components/server/CreateServerModal";
@@ -905,6 +906,7 @@ export default function Home() {
       }
     >
       <UpdateNotification />
+      <ModalA11yManager />
 
       {/* ✅ SettingsModal yok - AppShell'deki global instance kullanılıyor */}
 
@@ -1052,6 +1054,14 @@ export default function Home() {
 
         {/* Welcome/Chat/Friends/DM screen */}
         <div
+          // Gizliyken: Tab ile odaklanma ve ekran okuyucu bu katmana GİRMESİN (opacity-0 yalnızca görseli saklıyordu)
+          ref={(el) => {
+            if (!el) return;
+            const hidden = !!currentRoom && !(friendsMode && showFriendsPanel);
+            if (hidden) el.setAttribute("inert", "");
+            else el.removeAttribute("inert");
+          }}
+          aria-hidden={!!currentRoom && !(friendsMode && showFriendsPanel) ? "true" : undefined}
           className={`absolute inset-0 ${!currentRoom || (friendsMode && showFriendsPanel) ? "z-[60] bg-[#313338] opacity-100 pointer-events-auto" : "z-0 opacity-0 pointer-events-none"}`}
         >
             {friendsMode ? (

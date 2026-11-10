@@ -32,7 +32,7 @@ export default function ConfirmDialog({
   if (!isOpen) return null;
 
   const modalContent = (
-    <div 
+    <div role="dialog" aria-modal="true" aria-label="Onay" data-esc-close 
       className="fixed inset-0 bg-black/60 backdrop-blur-md z-[99999] flex items-center justify-center p-4 animate-fadeIn" 
       onClick={(e) => {
         // Backdrop'a tıklandığında modal'ı kapatma

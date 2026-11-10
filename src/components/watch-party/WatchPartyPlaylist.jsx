@@ -238,7 +238,7 @@ export function WatchPartyPlaylist({
           <span className="text-xs text-white/40 bg-white/5 px-2 py-0.5 rounded-lg">
             {playlist.length} parça
           </span>
-          <button
+          <button aria-label="Kapat"
             onClick={onClose}
             className="p-1.5 hover:bg-white/10 rounded-full transition-all text-white/50 hover:text-white"
           >
@@ -265,7 +265,7 @@ export function WatchPartyPlaylist({
                            placeholder:text-white/25"
               />
             </div>
-            <button
+            <button aria-label="Ekle"
               onClick={handleAdd}
               disabled={isAdding || !inputUrl.trim()}
               className="px-3 py-2.5 bg-emerald-500 hover:bg-emerald-400 rounded-xl

@@ -96,6 +96,9 @@ export default function Modal({
          fakat target kontrolü zaten bunu yapıyor.
       */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={typeof title === "string" ? title : undefined}
         className={`
           relative flex flex-col
           bg-gradient-to-br from-[#1a1b1e] via-[#16171a] to-[#111214]
@@ -124,7 +127,7 @@ export default function Modal({
               </h2>
             )}
             {showCloseButton && (
-              <button
+              <button aria-label="Kapat"
                 onClick={onClose}
                 className="group relative w-8 h-8 flex items-center justify-center rounded-lg text-[#949ba4] hover:text-white hover:bg-white/10 transition-all duration-200"
               >
@@ -210,7 +213,7 @@ export function ConfirmModal({
         {message && <p className="text-sm text-[#949ba4] leading-relaxed mb-8">{message}</p>}
         
         <div className="flex gap-3 w-full">
-          <button 
+          <button aria-label="Kapat" 
             onClick={onClose} 
             className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-[#dbdee1] bg-[#1e1f22] border border-white/5 hover:bg-white/5 hover:text-white transition-all"
           >

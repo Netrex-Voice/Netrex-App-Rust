@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useMemo, useState } from "react";
+import { clickable } from "@/src/utils/a11y";
 import { VOICE_GROUPS, DEFAULT_GROUP_ID } from "@/src/store/voiceGroupStore";
 import { Volume2, Signal, Lock } from "lucide-react";
 import VoiceParticipantItem from "./VoiceParticipantItem";
@@ -91,7 +92,11 @@ const VoiceChannelItem = memo(function VoiceChannelItem({
     >
       {/* Voice Channel Card */}
       <div
-        onClick={onClick}
+        {...clickable(
+          onClick,
+          `${channel.name}, sesli oda, ${participants?.length ? `${participants.length} kişi bağlı` : "boş"}${isActive ? ", bağlısınız" : ""}`,
+          { "aria-current": isActive ? "true" : undefined },
+        )}
         onContextMenu={onContextMenu}
         draggable={canReorder}
         onDragStart={

@@ -51,7 +51,7 @@ export default function CallInviteModal({ roomId, onClose }) {
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[999999] bg-[#000000cc] flex justify-center items-center backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <div role="dialog" aria-modal="true" aria-label="Aramaya davet" data-esc-close className="fixed inset-0 z-[999999] bg-[#000000cc] flex justify-center items-center backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-[#2b2d31] w-full max-w-md rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-white/5 relative scale-in-center">
         
         {/* Header */}
@@ -62,7 +62,7 @@ export default function CallInviteModal({ roomId, onClose }) {
               Odana katılmaları için arkadaşlarını çağır.
             </p>
           </div>
-          <button 
+          <button aria-label="Kapat" 
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-[#b5bac1] hover:text-[#f2f3f5] transition-colors"
           >

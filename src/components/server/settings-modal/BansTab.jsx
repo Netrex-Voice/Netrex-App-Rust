@@ -81,7 +81,7 @@ export default function BansTab({ serverId, fetchBans, unbanMember }) {
 
            {/* Unban Confirmation Modal */}
            {unbanModal.isOpen && createPortal(
-                <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4">
+                <div role="dialog" aria-modal="true" aria-label="Onay" data-esc-close className="fixed inset-0 z-[10050] flex items-center justify-center p-4">
                 <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-nds-fade-in" onClick={() => setUnbanModal({isOpen: false, userId: null})}></div>
                 
                 <div className="relative w-full max-w-md rounded-3xl border border-green-500/30 shadow-[0_0_50px_rgba(34,197,94,0.15)] overflow-hidden animate-nds-scale-in bg-gradient-to-br from-[#1a1b1e] via-[#16171a] to-[#111214]">

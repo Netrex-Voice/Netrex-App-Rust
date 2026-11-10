@@ -425,7 +425,7 @@ export default function DMConversation({ onBack, onStartCall }) {
       {/* ── Header ── */}
       <div className="h-[48px] px-4 flex items-center justify-between border-b border-white/[0.06] bg-[#111214]/50 backdrop-blur-md z-20">
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="p-1.5 text-[#949ba4] hover:text-white lg:hidden">
+          <button aria-label="Geri" onClick={onBack} className="p-1.5 text-[#949ba4] hover:text-white lg:hidden">
             <ArrowLeft size={20} />
           </button>
           

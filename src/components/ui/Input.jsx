@@ -87,7 +87,7 @@ const Input = forwardRef(function Input({
         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
           {/* Clear Button */}
           {clearable && props.value && (
-            <button
+            <button aria-label="Temizle"
               type="button"
               onClick={onClear}
               className="

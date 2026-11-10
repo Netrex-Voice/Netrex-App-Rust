@@ -80,7 +80,7 @@ export default function TetrisView() {
         {ui.over && <Overlay emoji="🏁" title="Oyun bitti" sub={`${ui.score} puan · ${ui.lines} satır`} record={ui.record} actions={<ArcadeBtn tone="good" big onClick={restart}>Tekrar oyna</ArcadeBtn>} />}
       </div>
       <div className="mt-2 flex gap-2 sm:hidden">
-        <button className={pad} onClick={mv(-1)}>◀</button><button className={pad} onClick={rot}>⟳</button><button className={pad} onClick={mv(1)}>▶</button><button className={pad} onClick={hard}>⤓</button>
+        <button className={pad} aria-label="Sola" onClick={mv(-1)}>◀</button><button className={pad} aria-label="Döndür" onClick={rot}>⟳</button><button className={pad} aria-label="Sağa" onClick={mv(1)}>▶</button><button className={pad} aria-label="Hızlı düşür" onClick={hard}>⤓</button>
       </div>
     </Frame>
   );

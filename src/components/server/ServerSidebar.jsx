@@ -351,6 +351,8 @@ export default function ServerSidebar({ onJoinChannel, activeTextChannelId }) {
             </span>
             {canManageChannels && (
               <button
+                type="button"
+                aria-label="Metin kanalı oluştur"
                 onClick={() => handleCreateChannel("text")}
                 className="text-[#5c5e66] hover:text-white transition-colors"
               >
@@ -396,6 +398,8 @@ export default function ServerSidebar({ onJoinChannel, activeTextChannelId }) {
             </span>
             {canManageChannels && (
               <button
+                type="button"
+                aria-label="Sesli oda oluştur"
                 onClick={() => handleCreateChannel("voice")}
                 className="text-[#5c5e66] hover:text-white transition-colors"
               >

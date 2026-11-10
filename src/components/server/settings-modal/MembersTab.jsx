@@ -147,7 +147,7 @@ export default function MembersTab({ members, roles }) {
 
       {/* Kick Confirmation Modal */}
       {kickModal.isOpen && createPortal(
-        <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" aria-label="Onay" data-esc-close className="fixed inset-0 z-[10050] flex items-center justify-center p-4">
            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-nds-fade-in" onClick={() => setKickModal({isOpen: false, member: null})}></div>
            <div className="relative w-full max-w-md rounded-3xl border border-red-500/30 shadow-[0_0_50px_rgba(239,68,68,0.2)] overflow-hidden animate-nds-scale-in bg-gradient-to-br from-[#1a1b1e] via-[#16171a] to-[#111214]">
                 {/* Top Glow */}
@@ -191,7 +191,7 @@ export default function MembersTab({ members, roles }) {
 
       {/* Ban Confirmation Modal */}
       {banModal.isOpen && createPortal(
-        <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" aria-label="Onay" data-esc-close className="fixed inset-0 z-[10050] flex items-center justify-center p-4">
            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-nds-fade-in" onClick={() => setBanModal({isOpen: false, member: null})}></div>
            <div className="relative w-full max-w-md rounded-3xl border border-red-500/30 shadow-[0_0_50px_rgba(239,68,68,0.2)] overflow-hidden animate-nds-scale-in bg-gradient-to-br from-[#1a1b1e] via-[#16171a] to-[#111214]">
                 {/* Top Glow */}

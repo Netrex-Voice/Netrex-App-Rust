@@ -276,7 +276,7 @@ export default function BadgesTab({ badges, members, onCreate, onUpdate, onDelet
 
       {/* Create/Edit Badge Modal */}
       {showCreateModal && createPortal(
-        <div className="fixed inset-0 z-[10020] flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" aria-label="Onay" data-esc-close className="fixed inset-0 z-[10020] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-nds-fade-in" onClick={() => { resetForm(); setShowCreateModal(false); }} />
           
           <div className="relative w-full max-w-md rounded-2xl border border-white/10 shadow-2xl overflow-hidden animate-nds-scale-in bg-gradient-to-br from-[#1a1b1e] via-[#16171a] to-[#111214]">
@@ -380,7 +380,7 @@ export default function BadgesTab({ badges, members, onCreate, onUpdate, onDelet
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && createPortal(
-        <div className="fixed inset-0 z-[10020] flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" aria-label="Onay" data-esc-close className="fixed inset-0 z-[10020] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-nds-fade-in" onClick={() => setShowDeleteModal(false)} />
           <div className="relative w-full max-w-sm rounded-2xl border border-white/10 shadow-2xl overflow-hidden animate-nds-scale-in bg-gradient-to-br from-[#1a1b1e] to-[#111214] p-6">
             <h3 className="text-lg font-bold text-white mb-2">Rozeti Sil</h3>
@@ -398,7 +398,7 @@ export default function BadgesTab({ badges, members, onCreate, onUpdate, onDelet
 
       {/* Assign Badge Modal */}
       {showAssignModal && selectedBadge && createPortal(
-        <div className="fixed inset-0 z-[10020] flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" aria-label="Onay" data-esc-close className="fixed inset-0 z-[10020] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-nds-fade-in" onClick={() => { setShowAssignModal(false); setSelectedBadge(null); }} />
           
           <div className="relative w-full max-w-md rounded-2xl border border-white/10 shadow-2xl overflow-hidden animate-nds-scale-in bg-gradient-to-br from-[#1a1b1e] via-[#16171a] to-[#111214]">

@@ -261,7 +261,7 @@ const OverviewTab = memo(function OverviewTab({ server, onUpdate, onDelete, isOw
 
         {/* Emoji Picker Modal */}
         {showEmojiPicker && createPortal(
-          <div 
+          <div role="dialog" aria-modal="true" aria-label="Onay" data-esc-close 
             className="fixed inset-0 z-[10100] flex items-center justify-center bg-black/80 backdrop-blur-sm" 
             onClick={() => setShowEmojiPicker(false)}
           >
@@ -323,7 +323,7 @@ const OverviewTab = memo(function OverviewTab({ server, onUpdate, onDelete, isOw
 
       {/* Delete Modal */}
       {showDeleteModal && createPortal(
-        <div className="fixed inset-0 z-[10020] flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" aria-label="Onay" data-esc-close className="fixed inset-0 z-[10020] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-nds-fade-in" onClick={() => setShowDeleteModal(false)}></div>
           
           <div className="relative w-full max-w-md rounded-3xl border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden animate-nds-scale-in bg-gradient-to-br from-[#1a1b1e] via-[#16171a] to-[#111214]">

@@ -2062,7 +2062,7 @@ const StageOverlay = React.memo(
                   </div>
                 ) : (
                   <>
-                    <button
+                    <button aria-label="Yayının sesini aç veya kapat"
                       onClick={toggleMuteStream}
                       className={`p-2 rounded-xl transition-all duration-200 hover:scale-110 border border-white/10 backdrop-blur-sm bg-black/30 relative flex items-center justify-center ${
                         volume === 0 ? "text-red-400" : "text-white"

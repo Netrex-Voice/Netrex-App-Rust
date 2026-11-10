@@ -101,7 +101,7 @@ export default function AccountActions({ user, logout, onClose }) {
 
       {/* Logout Modal */}
       {showLogoutModal && createPortal(
-        <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" aria-label="Onay" data-esc-close className="fixed inset-0 z-[10050] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-nds-fade-in" onClick={() => setShowLogoutModal(false)}></div>
           <div className="glass-strong bg-[#1e1f22] border border-red-500/20 rounded-2xl w-full max-w-md p-0 relative z-10 animate-nds-scale-in shadow-2xl overflow-hidden">
             <div className="p-6">

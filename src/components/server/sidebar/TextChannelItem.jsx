@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useState } from "react";
+import { clickable } from "@/src/utils/a11y";
 import { MessageSquare, Lock, Volume2, VolumeX } from "lucide-react";
 import { CHANNEL_MIME, hasType, readDragData } from "./dnd";
 
@@ -29,7 +30,9 @@ const TextChannelItem = memo(function TextChannelItem({
 
   return (
     <div
-      onClick={onClick}
+      {...clickable(onClick, `${channel.name}, metin kanalı${hasUnread ? ", okunmamış mesaj var" : ""}`, {
+        "aria-current": isActive ? "true" : undefined,
+      })}
       onContextMenu={onContextMenu}
       draggable={canReorder}
       onDragStart={
@@ -83,10 +86,14 @@ const TextChannelItem = memo(function TextChannelItem({
       <div className="flex items-center gap-2">
         {ttsEnabled && (
           <div
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleTtsMute(channel.id);
-            }}
+            {...clickable(
+              (e) => {
+                e.stopPropagation();
+                onToggleTtsMute(channel.id);
+              },
+              isTtsMuted ? "Sesli okumayı aç" : "Sesli okumayı kapat",
+              { "aria-pressed": !!isTtsMuted },
+            )}
             className="flex items-center justify-center -mr-1 z-10 p-1 rounded-md hover:bg-white/5"
           >
             {isTtsMuted ? (

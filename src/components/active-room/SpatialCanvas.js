@@ -285,7 +285,7 @@ const PresetPanel = memo(({ channelId, participantCount, localUserId, participan
                   className="flex-1 px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white text-[11px] placeholder:text-white/20 outline-none focus:border-indigo-500/50 transition-colors"
                   maxLength={20}
                 />
-                <button
+                <button aria-label="Düzeni kaydet"
                   onClick={handleSavePreset}
                   disabled={!presetName.trim()}
                   className="p-1.5 rounded-md bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/40 transition-all disabled:opacity-30"

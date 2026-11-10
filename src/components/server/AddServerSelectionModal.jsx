@@ -22,7 +22,7 @@ export default function AddServerSelectionModal({ isOpen, onClose, onCreateClick
   if (!mounted || !isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+    <div role="dialog" aria-modal="true" aria-label="Sunucu ekle" className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
@@ -33,7 +33,7 @@ export default function AddServerSelectionModal({ isOpen, onClose, onCreateClick
       <div className="relative w-full max-w-lg bg-[#111214] rounded-3xl border border-white/10 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
         
         {/* Close Button */}
-        <button 
+        <button aria-label="Kapat" 
             onClick={onClose}
             className="absolute top-4 right-4 p-2 rounded-xl text-[#949ba4] hover:bg-white/10 hover:text-white transition-colors z-10"
         >

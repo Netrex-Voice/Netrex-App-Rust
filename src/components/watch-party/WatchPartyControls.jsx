@@ -151,7 +151,7 @@ export function WatchPartyControls({
               </div>
 
               {/* Mute butonu */}
-              <button
+              <button aria-label="Sesi aç veya kapat"
                 onClick={toggleMute}
                 className={`w-full flex items-center justify-center gap-2 py-1.5 px-3 rounded-xl
                   text-xs font-medium transition-all

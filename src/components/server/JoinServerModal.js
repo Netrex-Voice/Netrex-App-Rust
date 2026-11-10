@@ -37,7 +37,7 @@ export default function JoinServerModal({ isOpen, onClose, onCreateClick }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center backdrop-blur-md animate-nds-fade-in">
+    <div role="dialog" aria-modal="true" aria-label="Sunucuya katıl" data-esc-close className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center backdrop-blur-md animate-nds-fade-in">
        {/* Animated background gradient */}
        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-teal-500/10 to-transparent pointer-events-none"></div>
 

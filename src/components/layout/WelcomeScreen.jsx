@@ -310,7 +310,7 @@ function ShortcutsModal({ onClose, shortcuts }) {
                   </div>
               </div>
               
-              <button 
+              <button aria-label="Kapat" 
                   onClick={onClose}
                   className="group w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 text-[#949ba4] hover:bg-red-500/10 hover:text-red-400 border border-transparent hover:border-red-500/20 transition-all duration-200"
               >

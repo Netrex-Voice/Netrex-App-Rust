@@ -158,7 +158,7 @@ export default function ScreenShareModal({ isOpen, onClose, onStart }) {
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="fixed inset-0 bg-black/70 z-[99999] flex items-center justify-center p-4 backdrop-blur-xl animate-fadeIn">
+    <div role="dialog" aria-modal="true" aria-label="Ekran paylaşımı" data-esc-close className="fixed inset-0 bg-black/70 z-[99999] flex items-center justify-center p-4 backdrop-blur-xl animate-fadeIn">
       {/* Animated background gradient - More vibrant */}
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 via-purple-500/15 to-cyan-500/10 pointer-events-none animate-gradient" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-500/10 via-transparent to-transparent pointer-events-none" />
@@ -190,7 +190,7 @@ export default function ScreenShareModal({ isOpen, onClose, onStart }) {
                 : "Yayının ne kadar net ve akıcı olacağını seç."}
             </p>
           </div>
-          <button
+          <button aria-label="Kapat"
             onClick={onClose}
             className="text-white/60 hover:text-white bg-white/[0.03] hover:bg-gradient-to-br hover:from-red-500/20 hover:to-red-600/15 border border-white/[0.08] hover:border-red-500/30 p-2.5 rounded-2xl transition-all duration-300 hover:scale-110 hover:shadow-[0_0_20px_rgba(239,68,68,0.4)] active:scale-95 relative z-10 group/close backdrop-blur-sm"
           >

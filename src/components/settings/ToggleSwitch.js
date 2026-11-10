@@ -10,6 +10,10 @@ export default function ToggleSwitch({ label, description, checked, onChange }) 
         </div>
       </div>
       <button
+        type="button"
+        role="switch"
+        aria-checked={!!checked}
+        aria-label={label}
         onClick={onChange}
         className={`w-14 h-7 rounded-full relative transition-all duration-slow ease-in-out border-2 shrink-0 focus:outline-none ${
           checked

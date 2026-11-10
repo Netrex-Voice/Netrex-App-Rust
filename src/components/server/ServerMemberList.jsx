@@ -475,7 +475,7 @@ export default function ServerMemberList({ onClose }) {
           </div>
         </div>
         {onClose && (
-          <button
+          <button aria-label="Kapat"
             onClick={onClose}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-[#949ba4] hover:text-white hover:bg-white/10 transition-all duration-200"
           >

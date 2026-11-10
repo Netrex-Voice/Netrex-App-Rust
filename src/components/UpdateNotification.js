@@ -141,7 +141,7 @@ export default function UpdateNotification() {
               </div>
             </div>
             
-            <button onClick={handleClose} className="text-[#949ba4] hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors">
+            <button aria-label="Kapat" onClick={handleClose} className="text-[#949ba4] hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors">
               <X size={16} />
             </button>
           </div>

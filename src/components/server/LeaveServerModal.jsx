@@ -7,7 +7,7 @@ export default function LeaveServerModal({ isOpen, onClose, onConfirm, serverNam
   if (!isOpen || typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4">
+    <div role="dialog" aria-modal="true" aria-label="Sunucudan ayrıl" data-esc-close className="fixed inset-0 z-[10050] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" 

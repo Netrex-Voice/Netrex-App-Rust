@@ -54,7 +54,7 @@ const ProfileHeader = memo(
                 <Edit3 size={14} />
               </button>
             ) : (
-              <button className="w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 text-white/90 hover:text-white backdrop-blur-md flex items-center justify-center border border-white/10 transition-all">
+              <button aria-label="Diğer seçenekler" className="w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 text-white/90 hover:text-white backdrop-blur-md flex items-center justify-center border border-white/10 transition-all">
                 <MoreHorizontal size={16} />
               </button>
             )}

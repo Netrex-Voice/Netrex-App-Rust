@@ -60,7 +60,7 @@ export function WatchPartyUserPrefs({ onClose, videoFS }) {
         <div className="flex items-center justify-between px-5 py-4
                       border-b border-white/5 bg-white/5 shrink-0">
         <h3 className="text-sm font-bold text-white tracking-wide">Kişisel Ayarlar</h3>
-        <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-full transition-all text-white/50 hover:text-white">
+        <button aria-label="Kapat" onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-full transition-all text-white/50 hover:text-white">
           <X size={16} />
         </button>
       </div>
@@ -79,7 +79,7 @@ export function WatchPartyUserPrefs({ onClose, videoFS }) {
                 <p className="text-xs text-white/40 mt-0.5">Videoyu player'da göster</p>
               </div>
             </div>
-            <button onClick={toggleVideo}
+            <button aria-label="Videoyu aç veya kapat" onClick={toggleVideo}
               className={`w-12 h-6 rounded-full transition-all duration-300 relative
                 ${prefs.videoMode ? 'bg-purple-500' : 'bg-white/10'}`}>
               <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-all duration-300 shadow-md

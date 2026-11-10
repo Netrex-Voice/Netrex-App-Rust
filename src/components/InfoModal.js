@@ -24,7 +24,7 @@ export default function InfoModal({
   if (!isOpen) return null;
 
   const modalContent = (
-    <div 
+    <div role="dialog" aria-modal="true" aria-label="Bilgi" data-esc-close 
       className="fixed inset-0 bg-black/60 backdrop-blur-md z-[99999] flex items-center justify-center p-4 animate-fadeIn" 
       onClick={(e) => {
         if (e.target === e.currentTarget) {

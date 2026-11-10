@@ -158,7 +158,7 @@ export default function ChannelContextMenu({
         <div className="p-2 space-y-1">
           {!isVoiceChannel && ttsEnabled && (
             <>
-              <button
+              <button aria-label="Sesli okumayı aç veya kapat"
                 onClick={handleToggleTtsMute}
                 className="group w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all duration-200"
               >

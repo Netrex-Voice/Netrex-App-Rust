@@ -53,7 +53,7 @@ export default function EmojiPicker({ onSelect, onClose }) {
             className="w-full bg-white/5 border border-white/5 rounded-xl py-2 pl-9 pr-3 text-xs text-white focus:outline-none focus:border-indigo-500/50 transition-all"
           />
         </div>
-        <button 
+        <button aria-label="Kapat" 
           onClick={onClose}
           className="p-2 hover:bg-white/5 rounded-xl text-[#5c5e66] hover:text-white transition-all"
         >

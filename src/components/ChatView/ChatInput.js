@@ -34,7 +34,7 @@ export default function ChatInput({
             <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent pointer-events-none" />
             <div className="relative">
               <img src={pendingImage} alt="Preview" className="h-32 sm:h-40 rounded-xl object-contain bg-black/40 border border-white/5 shadow-inner" />
-              <button
+              <button aria-label="Resmi kaldır"
                 onClick={removePendingImage}
                 className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full p-1.5 shadow-lg hover:bg-rose-600 transition hover:scale-110 active:scale-95 z-10 border border-white/10"
               >

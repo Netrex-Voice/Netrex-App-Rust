@@ -21,7 +21,7 @@ export default function VoiceChannelSwitchModal({
   return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" aria-label="Sesli kanalı değiştir" data-esc-close className="fixed inset-0 z-[100000] flex items-center justify-center p-4">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -45,7 +45,7 @@ export default function VoiceChannelSwitchModal({
             
             <div className="p-8 flex flex-col items-center text-center">
               {/* Close Button */}
-              <button 
+              <button aria-label="Kapat" 
                 onClick={onClose}
                 className="absolute top-6 right-6 p-2 text-[#949ba4] hover:text-white hover:bg-white/5 rounded-full transition-all"
               >

@@ -85,7 +85,7 @@ export default function MobileDrawer({
                   <h2 className="text-sm font-semibold text-white">{title}</h2>
                 )}
                 {showCloseButton && (
-                  <button
+                  <button aria-label="Kapat"
                     onClick={onClose}
                     className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 text-[#949ba4] hover:text-white hover:bg-white/10 transition-colors"
                   >

@@ -55,7 +55,9 @@ function ControlBtn({
   return (
     <div className="relative group">
       <button
+        type="button"
         onClick={onClick}
+        aria-label={label}
         disabled={disabled}
         className={`
           w-11 h-11 sm:w-12 sm:h-12 

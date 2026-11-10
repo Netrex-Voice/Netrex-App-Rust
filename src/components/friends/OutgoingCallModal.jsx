@@ -13,7 +13,7 @@ export default function OutgoingCallModal({ targetUser, onCancel, isOpen }) {
   return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" aria-label="Aranıyor" className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
           {/* Background Overlay */}
           <motion.div 
             initial={{ opacity: 0 }}
