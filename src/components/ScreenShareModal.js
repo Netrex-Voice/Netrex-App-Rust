@@ -33,6 +33,10 @@ export default function ScreenShareModal({ isOpen, onClose, onStart }) {
   const [withAudio, setWithAudio] = useState(true);
   const [audioMode, setAudioMode] = useState("system"); // "system" | "app" - Ekran için sistem, uygulama için uygulama
 
+  // Windows masaüstü (Tauri): yakalama Rust'ta (WASAPI uygulama bazlı) yapılır; Netrex'in kendi sesi (WebView2 süreci)
+  // yakalamadan HARİÇ tutulur, pencere paylaşımında yalnızca o uygulamanın sesi alınır. Web / diğer platformlarda geçerli değildir.
+  const nativeAudio = typeof window !== "undefined" && !!window.netrex?.isTauri && /Win/i.test(navigator.platform || "");
+
   // 1080p seçildiğinde FPS'i 30'a düşür (Kısıtlama)
   useEffect(() => {
     if (resolution === 1080 && fps > 30) {
@@ -648,8 +652,8 @@ export default function ScreenShareModal({ isOpen, onClose, onStart }) {
                         className="shrink-0 mt-0.5 relative z-10 text-amber-300"
                       />
                       <span className="relative z-10">
-                        <strong>Dikkat:</strong> Sistem sesi paylaşılırken Netrex'ten gelen sesler de dahil olur. 
-                        Yankı önlemek için <strong>kulaklık kullanmanızı</strong> öneririz.
+                        {nativeAudio ? (<><strong>Netrex'in kendi sesi yayına karışmaz</strong> (odadakilerin sesi, bildirim sesleri), yani yankı olmaz. Diğer uygulamaların sesi paylaşılır.</>) : (<><strong>Dikkat:</strong> Sistem sesi paylaşılırken Netrex'ten gelen sesler de dahil olur.
+                        Yankı önlemek için <strong>kulaklık kullanmanızı</strong> öneririz.</>)}
                       </span>
                     </div>
                   )}
@@ -663,8 +667,8 @@ export default function ScreenShareModal({ isOpen, onClose, onStart }) {
                         className="shrink-0 mt-0.5 relative z-10 text-amber-300"
                       />
                       <span className="relative z-10">
-                        <strong>Dikkat:</strong> Windows sınırlaması nedeniyle uygulama paylaşımında da tüm sistem sesi alınır. 
-                        Yankı önlemek için <strong>kulaklık kullanmanızı</strong> öneririz.
+                        {nativeAudio ? (<><strong>Yalnızca seçtiğiniz uygulamanın sesi</strong> paylaşılır; diğer uygulamaların ve Netrex'in sesi karışmaz.</>) : (<><strong>Dikkat:</strong> Windows sınırlaması nedeniyle uygulama paylaşımında da tüm sistem sesi alınır.
+                        Yankı önlemek için <strong>kulaklık kullanmanızı</strong> öneririz.</>)}
                       </span>
                     </div>
                   )}
