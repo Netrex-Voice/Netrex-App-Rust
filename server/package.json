@@ -4,13 +4,15 @@
   "private": true,
   "description": "Netrex sunucu tarafı: LiveKit token, Cloudinary silme (Vercel serverless). Secret'lar yalnızca burada durur.",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "test": "node --test \"test/*.test.mjs\""
   },
   "dependencies": {
     "cloudinary": "^2.5.1",
     "jose": "^5.9.6",
-    "livekit-server-sdk": "^2.9.7"
+    "livekit-server-sdk": "^2.19.3"
   }
 }

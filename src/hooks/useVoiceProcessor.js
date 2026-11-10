@@ -170,7 +170,8 @@ export function useVoiceProcessor() {
           resolveWorkletUrl: getResourcePath,
           onMetrics: (m) => handleMetricsRef.current(m),
         });
-        track.setAudioContext(ctx); // webAudioMix açmadan, processor kendi 48 kHz context'ini kullansın
+        // livekit-client 2.23'ten beri bu çağrı Promise döndürür: setProcessor'dan ÖNCE tamamlanmalı (eski sürümde await zararsız)
+        await track.setAudioContext(ctx); // webAudioMix açmadan, processor kendi 48 kHz context'ini kullansın
         await track.setProcessor(processor);
         if (disposed) {
           await track.stopProcessor().catch(() => {});
