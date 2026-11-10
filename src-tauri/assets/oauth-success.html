@@ -1,0 +1,123 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Giriş Başarılı</title>
+    <style>
+        
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+        background: #050508; 
+        color: #e2e8f0; 
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif; 
+        height: 100vh; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        overflow: hidden; 
+        user-select: none;
+    }
+    .aurora { position: absolute; filter: blur(120px); opacity: 0.15; z-index: 1; pointer-events: none; border-radius: 50%; }
+    .particles { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+    .p { position: absolute; background: white; border-radius: 50%; opacity: 0; }
+    
+    .container { position: relative; z-index: 10; display: flex; flex-direction: column; align-items: center; gap: 32px; width: 100%; }
+    .logo-box { position: relative; width: 140px; height: 140px; display: flex; align-items: center; justify-content: center; }
+    .ring { position: absolute; inset: -20px; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 40px; }
+    .ring-active { position: absolute; inset: -20px; border: 1px solid transparent; border-radius: 40px; animation: rotate 12s linear infinite; }
+    
+    @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes draw { to { stroke-dashoffset: 0; } }
+    @keyframes fill-inner { to { fill-opacity: 1; stroke-width: 0; } }
+    @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .brand { 
+        font-size: 32px; font-weight: 950; letter-spacing: 0.3em; 
+        text-align: center; opacity: 0; animation: fade-in 0.8s ease-out 0.5s forwards;
+        display: flex; justify-content: center; width: 100%;
+        text-indent: 0.3em; 
+    }
+    .status-text { 
+        font-size: 10px; font-weight: 800; color: rgba(255,255,255,0.25); 
+        text-transform: uppercase; letter-spacing: 0.4em; 
+        text-align: center; width: 100%;
+        text-indent: 0.4em;
+        opacity: 0; animation: fade-in 0.8s ease-out 0.8s forwards;
+    }
+
+    /* Edge-to-edge Progress Bar at the absolute bottom */
+    .progress-track { 
+        position: absolute; bottom: 0; left: 0; width: 100%; height: 3px; 
+        background: rgba(255,255,255,0.02); z-index: 20; overflow: hidden;
+    }
+    .progress-fill { height: 100%; width: 0%; transition: width 0.1s linear; box-shadow: 0 0 15px currentColor; }
+
+        /* Refined aurora effects with lower opacity - no dark overlay */
+        .aurora { position: absolute; filter: blur(120px); opacity: 0.08; z-index: 1; pointer-events: none; border-radius: 50%; }
+        
+        .card { 
+            position: relative; z-index: 10; 
+            background: rgba(15, 15, 20, 0.95); 
+            backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.08); 
+            padding: 56px; 
+            border-radius: 40px; 
+            text-align: center; 
+            width: 420px; 
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes slideUp { 
+            from { opacity: 0; transform: translateY(30px) scale(0.95); } 
+            to { opacity: 1; transform: translateY(0) scale(1); } 
+        }
+        .btn { 
+            width: 100%; 
+            padding: 16px 24px; 
+            background: linear-gradient(135deg, #6366f1, #a855f7); 
+            color: white; 
+            border-radius: 18px; 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            font-weight: 700; 
+            font-size: 15px;
+            cursor: pointer; 
+            transition: all 0.3s; 
+            margin-top: 20px;
+        }
+        .btn:hover { 
+            transform: translateY(-2px); 
+            filter: brightness(110%); 
+            box-shadow: 0 8px 24px rgba(168, 85, 247, 0.3);
+        }
+        h1 { 
+            font-size: 28px; 
+            font-weight: 900; 
+            letter-spacing: 0.2em; 
+            text-indent: 0.2em; 
+            margin-bottom: 10px; 
+        }
+        p {
+            color: rgba(255,255,255,0.5);
+            margin: 10px 0 20px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="aurora" style="width:600px;height:600px;background:#a855f7;top:-10%;left:-10%"></div>
+    <div class="aurora" style="width:500px;height:500px;background:#6366f1;bottom:-10%;right:-10%"></div>
+
+    
+    <div class="card">
+        <svg width="80" height="80" viewBox="0 0 256 256" style="margin-bottom:20px">
+            <g transform="translate(0,256) scale(0.1,-0.1)">
+                <path d="M470 2469 c-126 -21 -259 -116 -318 -227 -63 -119 -62 -98 -62 -952 0 -451 4 -800 10 -835 20 -127 120 -269 232 -330 102 -56 87 -55 954 -55 703 0 807 2 855 16 149 44 264 158 315 314 17 51 19 114 22 825 2 540 0 794 -8 850 -29 204 -181 362 -380 394 -81 13 -1540 13 -1620 0z m816 -1035 l339 -396 3 71 c3 70 2 72 -38 120 l-40 48 2 274 3 274 132 3 c131 3 133 2 137 -20 3 -13 4 -257 3 -543 l-2 -520 -105 -3 -105 -2 -235 276 c-129 153 -281 331 -337 396 l-103 119 0 -75 c0 -73 1 -76 40 -121 l40 -47 -2 -271 -3 -272 -135 0 -135 0 -3 530 c-1 292 0 536 3 543 3 8 33 12 103 12 l98 0 340 -396z" fill="#a855f7"/>
+            </g>
+        </svg>
+        <h1>HOŞ GELDİN</h1><p>Giriş başarıyla tamamlandı.</p><script>setTimeout(()=>window.close(),2000)</script>
+    </div>
+    
+</body>
+</html>

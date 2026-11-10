@@ -1,0 +1,117 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: "Derlenecek platformlar"
+        type: choice
+        default: all
+        options:
+          - all
+          - windows
+          - macos
+          - linux
+      publish:
+        description: "GitHub Release'e yükle (kapalıysa sadece Actions artifact olarak kalır)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  plan:
+    name: Platformları belirle
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - id: set
+        shell: bash
+        env:
+          PLATFORMS: ${{ inputs.platforms || 'all' }}
+        run: |
+          node -e '
+            const all = [
+              { name: "Windows (exe)", key: "windows", os: "windows-latest", args: "--win" },
+              { name: "macOS (dmg)", key: "macos", os: "macos-latest", args: "--mac --x64 --arm64" },
+              { name: "Linux (AppImage)", key: "linux", os: "ubuntu-latest", args: "--linux" },
+            ];
+            const p = process.env.PLATFORMS;
+            const include = p === "all" ? all : all.filter((x) => x.key === p);
+            require("fs").appendFileSync(process.env.GITHUB_OUTPUT, "matrix=" + JSON.stringify({ include }) + "\n");
+          '
+
+  build:
+    name: ${{ matrix.name }}
+    needs: plan
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Tag ile package.json versiyonu eşleşiyor mu?
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          PKG="v$(node -p "require('./package.json').version")"
+          if [ "$PKG" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag ($GITHUB_REF_NAME) ile package.json versiyonu ($PKG) uyuşmuyor"
+            exit 1
+          fi
+
+      - name: Bağımlılıkları kur
+        run: npm ci
+
+      - name: .env.local oluştur
+        shell: bash
+        env:
+          ENV_LOCAL: ${{ secrets.ENV_LOCAL }}
+        run: |
+          if [ -z "$ENV_LOCAL" ]; then
+            echo "::error::ENV_LOCAL secret tanımlı değil (Settings > Secrets and variables > Actions)"
+            exit 1
+          fi
+          printf '%s\n' "$ENV_LOCAL" > .env.local
+          node scripts/copy-env.js
+
+      - name: Next.js build
+        run: npm run build
+
+      - name: Derle ve (gerekirse) yayınla
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ] || [ "${{ inputs.publish }}" = "true" ]; then
+            PUBLISH=always
+          else
+            PUBLISH=never
+          fi
+          npx electron-builder ${{ matrix.args }} --publish $PUBLISH
+
+      - name: Artifact olarak yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: netrex-${{ matrix.key }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+            dist/*.AppImage
+            dist/latest*.yml
+            dist/*.blockmap

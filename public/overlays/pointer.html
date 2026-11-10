@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src ipc: http://ipc.localhost; img-src data: blob: https:; font-src data:;">
+<title>Netrex İşaretçi</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; }
+  body { font-family: 'Segoe UI', -apple-system, system-ui, sans-serif; user-select: none; }
+
+  /* ═══════════ EFEKT KATMANI (çizim + tıklama dalgası) ═══════════ */
+  #fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+
+  /* ═══════════ İMLEÇLER ═══════════ */
+  #cursor-layer { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+  .ptr { position: absolute; transition: left 60ms linear, top 60ms linear; transform: translate(-2px, -2px); }
+  .ptr svg { display: block; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5)); }
+  .ptr-name {
+    position: absolute; top: 22px; left: 12px; white-space: nowrap;
+    background: rgba(17,18,20,0.92); color: #fff; padding: 2px 7px; border-radius: 5px;
+    font-size: 11px; font-weight: 600; border: 1px solid rgba(255,255,255,0.12);
+  }
+
+  /* ═══════════ WIDGET: sağ altta minik baloncuk ═══════════ */
+  /* Alttan/sağdan konumlanır; panel ve kart baloncuğun ÜSTÜNE doğru büyür. */
+  #widget {
+    position: fixed; right: 16px; bottom: 16px; z-index: 9999;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+    opacity: 0.3; transition: opacity 0.2s ease;
+  }
+  #widget:hover, #widget.open, #widget.alert { opacity: 1; }
+
+  #bubble {
+    position: relative; width: 26px; height: 26px; border-radius: 50%;
+    background: rgba(17,18,20,0.78); border: 1px solid rgba(129,140,248,0.45);
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.4);
+  }
+  #bubble:hover { border-color: rgba(165,180,252,0.9); }
+  #bubble svg { display: block; }
+  #widget.alert #bubble { border-color: #f59e0b; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.55); } 50% { box-shadow: 0 0 0 6px rgba(245,158,11,0); } }
+  #badge {
+    position: absolute; top: -4px; left: -4px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 7px;
+    background: #6366f1; color: #fff; font-size: 8px; font-weight: 700; line-height: 13px; text-align: center; display: none;
+  }
+  #badge.on { display: block; }
+  #badge.hot { background: #f59e0b; color: #1a1305; }
+
+  /* ── Küçük istek kartı (panel kapalıyken) ── */
+  #card {
+    display: none; width: 172px; flex-direction: column; gap: 4px;
+    background: rgba(17,18,20,0.94); border: 1px solid rgba(245,158,11,0.5); border-radius: 8px; padding: 6px 7px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+  }
+  #card .req-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+
+  /* ── Panel (açılınca) ── */
+  #panel {
+    display: none; flex-direction: column; width: 176px;
+    background: rgba(17,18,20,0.94); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+    box-shadow: 0 3px 16px rgba(0,0,0,0.5); overflow: hidden;
+  }
+  .ph { display: flex; align-items: center; justify-content: space-between; padding: 5px 6px 5px 8px; border-bottom: 1px solid rgba(255,255,255,0.07); cursor: grab; }
+  .ph:active { cursor: grabbing; }
+  .ph-title { color: rgba(255,255,255,0.8); font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+  .ph-btns { display: flex; gap: 4px; align-items: center; }
+  .ic-btn {
+    width: 16px; height: 16px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.12); background: none;
+    color: rgba(255,255,255,0.6); font-size: 9px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .ic-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+  .ic-btn.danger { color: #f87171; border-color: rgba(248,113,113,0.3); }
+  .ic-btn.danger:hover { background: #ef4444; color: #fff; border-color: #ef4444; }
+
+  .pb { padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .row-label { color: rgba(255,255,255,0.7); font-size: 10px; }
+  .sep { font-size: 8.5px; color: rgba(255,255,255,0.38); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; padding-top: 5px; border-top: 1px solid rgba(255,255,255,0.07); }
+  .hidden { display: none !important; }
+
+  .tgl { position: relative; display: inline-block; width: 24px; height: 14px; flex-shrink: 0; }
+  .tgl input { opacity: 0; width: 0; height: 0; }
+  .tgl-s { position: absolute; cursor: pointer; inset: 0; background: rgba(255,255,255,0.15); border-radius: 14px; transition: .2s; }
+  .tgl-s::before { content: ''; position: absolute; width: 10px; height: 10px; left: 2px; bottom: 2px; background: #fff; border-radius: 50%; transition: .2s; }
+  .tgl input:checked + .tgl-s { background: #6366f1; }
+  .tgl input:checked + .tgl-s::before { transform: translateX(10px); }
+
+  input[type=range] { -webkit-appearance: none; width: 70px; background: transparent; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 3px; background: rgba(255,255,255,0.15); border-radius: 3px; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 10px; border-radius: 50%; background: #a5b4fc; margin-top: -3.5px; }
+
+  .list { display: flex; flex-direction: column; gap: 4px; max-height: 110px; overflow-y: auto; }
+  .list::-webkit-scrollbar { width: 3px; }
+  .list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+  .item { display: flex; align-items: center; justify-content: space-between; gap: 5px; background: rgba(255,255,255,0.05); padding: 3px 6px; border-radius: 5px; font-size: 10px; color: rgba(255,255,255,0.9); }
+  .item.req { background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.3); }
+  .item-left { display: flex; align-items: center; gap: 5px; min-width: 0; }
+  .item-left .nm, .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ui-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .item-btns { display: flex; gap: 3px; flex-shrink: 0; }
+  .mini { border-radius: 4px; padding: 2px 6px; font-size: 9px; font-weight: 700; cursor: pointer; border: 1px solid transparent; }
+  .mini.ok { background: #16a34a; color: #fff; }
+  .mini.ok:hover { background: #22c55e; }
+  .mini.no { background: rgba(248,113,113,0.12); color: #f87171; border-color: rgba(248,113,113,0.3); }
+  .mini.no:hover { background: #ef4444; color: #fff; }
+  .empty { color: rgba(255,255,255,0.35); font-size: 9.5px; font-style: italic; }
+  .req-name { font-size: 10px; color: rgba(255,255,255,0.92); min-width: 0; }
+</style>
+</head>
+<body>
+<canvas id="fx"></canvas>
+<div id="cursor-layer"></div>
+
+<div id="widget">
+  <!-- Panel kapalıyken yeni istek gelirse çıkan minik kart -->
+  <div id="card"></div>
+
+  <div id="panel">
+    <div class="ph" id="drag-handle">
+      <span class="ph-title">İşaretçi</span>
+      <div class="ph-btns">
+        <button class="ic-btn" id="btn-min" title="Küçült">▾</button>
+        <button class="ic-btn danger" id="btn-close" title="Paylaşımı kapat">✕</button>
+      </div>
+    </div>
+    <div class="pb">
+      <div id="req-section" class="hidden">
+        <div class="sep" style="border-top:none;padding-top:0;margin-bottom:4px;color:#fbbf24">İstekler</div>
+        <div class="list" id="rlist"></div>
+      </div>
+      <div class="row">
+        <span class="row-label">Göster</span>
+        <label class="tgl"><input type="checkbox" id="chk-vis" checked><span class="tgl-s"></span></label>
+      </div>
+      <div class="row">
+        <span class="row-label">Opaklık</span>
+        <input type="range" id="rng-opacity" min="10" max="100" value="100">
+      </div>
+      <div class="sep">İzinliler</div>
+      <div class="list" id="ulist"><div class="empty">Henüz kimse yok</div></div>
+    </div>
+  </div>
+
+  <div id="bubble" title="İşaretçi paylaşımı">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-5.07a.5.5 0 0 1 .36-.15h6.87a.5.5 0 0 0 .35-.85L6.35 2.85a.5.5 0 0 0-.85.36z" fill="#818cf8" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    <span id="badge"></span>
+  </div>
+</div>
+
+<script src="overlay-bridge.js" data-label="pointer-overlay"></script>
+<script src="pointer.js"></script>
+</body>
+</html>

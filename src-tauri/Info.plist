@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Tauri bu dosyayı macOS paketinin Info.plist'ine birleştirir. İzin diyaloglarında gösterilen metinler. -->
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Netrex, sesli sohbette konuşabilmeniz için mikrofonunuza erişir.</string>
+  <key>NSCameraUsageDescription</key>
+  <string>Netrex, görüntülü sohbette kameranızı paylaşabilmeniz için kameranıza erişir.</string>
+  <key>NSScreenCaptureUsageDescription</key>
+  <string>Netrex, ekran paylaşımı yaptığınızda ekranınızı odadaki kişilere gösterir.</string>
+</dict>
+</plist>

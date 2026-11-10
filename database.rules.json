@@ -1,0 +1,27 @@
+{
+  "rules": {
+    "room_presence": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "user_voice_state": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "user_presence": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "voice_commands": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$cmdId": {
+          ".write": "auth != null && (auth.uid === $uid || !data.exists())",
+          ".validate": "!newData.exists() || (newData.child('by').val() === auth.uid && newData.child('type').isString() && newData.child('serverId').isString())"
+        }
+      }
+    }
+  }
+}

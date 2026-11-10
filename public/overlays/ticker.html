@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src ipc: http://ipc.localhost; img-src data: blob: https:; font-src data:;">
+<title>Netrex Kayan Mesaj</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; }
+  body { font-family: 'Segoe UI', -apple-system, system-ui, sans-serif; user-select: none; }
+
+  #lane { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+
+  /* Kayan mesaj: koyu, yarı saydam hap. Okunur ama dikkat dağıtmayacak kadar sakin. */
+  .msg {
+    position: absolute; top: 50%; left: 0; margin-top: -22px; height: 44px;
+    display: flex; align-items: center; gap: 10px; white-space: nowrap;
+    padding: 0 20px; border-radius: 22px;
+    background: rgba(17, 18, 20, var(--bg, 0.7));
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+    color: rgba(255, 255, 255, var(--fg, 0.95));
+    font-size: 21px; font-weight: 600; letter-spacing: 0.01em;
+    will-change: transform;
+    pointer-events: auto; cursor: pointer;   /* tıklayınca kapanır */
+    transition: border-color .15s, background .15s;
+  }
+  .msg:hover { border-color: rgba(255, 255, 255, 0.4); }
+  .msg .name { color: #a5b4fc; font-weight: 700; }
+  .msg .sep { opacity: 0.45; }
+
+  /* Kapat düğmesi: yalnızca mesaj varken görünür, sağ uçta küçük ve silik */
+  #close {
+    position: absolute; right: 14px; top: 50%; margin-top: -13px; width: 26px; height: 26px; border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.25); background: rgba(17,18,20,0.85); color: rgba(255,255,255,0.8);
+    font-size: 12px; line-height: 1; cursor: pointer; display: none; align-items: center; justify-content: center;
+    opacity: 0.55; transition: opacity .15s, background .15s; z-index: 10;
+  }
+  #close.on { display: flex; }
+  #close:hover { opacity: 1; background: #ef4444; border-color: #ef4444; color: #fff; }
+</style>
+</head>
+<body>
+<div id="lane"></div>
+<button id="close" title="Kayan mesajı kapat">✕</button>
+
+<script src="overlay-bridge.js" data-label="ticker-overlay"></script>
+<script src="ticker.js"></script>
+</body>
+</html>

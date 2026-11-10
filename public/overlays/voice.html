@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    overflow: hidden;
+    background: transparent;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    user-select: none;
+  }
+
+  #root {
+    padding: 4px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  /* ═══ USER ROW ═══ */
+  .ur {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 12px 3px 3px;
+    height: 34px;
+    border-radius: 17px;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    width: max-content;
+    max-width: 100%;
+  }
+
+  /* Avatar container */
+  .ac {
+    position: relative;
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+  }
+  .ac img {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  .ac .fl {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  /* Speaking green ring — Discord style */
+  .ac::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 2.5px solid transparent;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    pointer-events: none;
+  }
+  .ur.spk .ac::after {
+    border-color: #23a559;
+    box-shadow: 0 0 8px rgba(35, 165, 89, 0.4);
+  }
+
+  /* Name */
+  .nm {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.5);
+  }
+  .ur.spk .nm {
+    color: #fff;
+  }
+  .ur:not(.spk) .nm {
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  /* Status icons (mute/deafen) */
+  .si {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.8));
+  }
+
+  /* Overflow text */
+  .ov {
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.35);
+    text-align: center;
+    padding: 2px 0;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  }
+
+  /* Controls bar */
+  #cb {
+    display: none;
+    gap: 4px;
+    padding: 4px 0 2px;
+    pointer-events: auto;
+  }
+  .btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.12s ease;
+    background: rgba(0,0,0,0.5);
+    color: rgba(255,255,255,0.7);
+    backdrop-filter: blur(4px);
+  }
+  .btn:hover {
+    transform: scale(1.15);
+    background: rgba(0,0,0,0.7);
+    color: #fff;
+  }
+  .btn.on {
+    background: rgba(239,68,68,0.7);
+    color: #fff;
+  }
+  .btn.lv {
+    background: rgba(239,68,68,0.5);
+    color: #fff;
+  }
+  .btn.lv:hover {
+    background: rgba(239,68,68,0.9);
+  }
+
+  svg { display: block; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="cb">
+  <button class="btn" id="bm"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg></button>
+  <button class="btn" id="bd"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6M21 19a2 2 0 0 1-2 2h-1v-4h3v2zM3 19a2 2 0 0 0 2 2h1v-4H3v2z"/></svg></button>
+  <button class="btn lv" id="bl"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="23" y1="1" x2="1" y2="23"/></svg></button>
+</div>
+
+<script src="overlay-bridge.js" data-label="voice-overlay"></script>
+<script src="voice.js"></script>
+</body>
+</html>

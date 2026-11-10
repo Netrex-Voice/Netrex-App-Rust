@@ -1,0 +1,222 @@
+rules_version = '2';
+
+// ============================================================================
+// NETREX — Firestore güvenlik kuralları
+// ----------------------------------------------------------------------------
+// Önceki kural (herkese tam açık, giriş bile gerekmiyordu) yerine geçer.
+//
+// Genel ilke:
+//   • Giriş yapmamış kimse hiçbir şeye erişemez.
+//   • Sunucu verisini (kanallar, mesajlar, roller, üyeler...) yalnızca o sunucunun üyeleri / sahibi görür ve değiştirir.
+//   • DM konuşmaları ve mesajları yalnızca katılımcılara açıktır.
+//   • Arkadaşlık kayıtlarını yalnızca taraflar görür/değiştirir.
+//   • Kullanıcı belgesini yalnızca sahibi yazar (tek istisna: moderatörün sesli kanaldan atma işlemi).
+//
+// BİLİNEN SINIRLAR (uygulama izinleri istemci tarafında kontrol ediliyor, bu kurallar rol izinlerini bilmiyor):
+//   • Bir sunucunun HERHANGİ bir üyesi, arayüz izin vermese bile o sunucunun ayarlarını/rollerini/üyelerini
+//     doğrudan değiştirebilir. Rol bazlı kısıtlama (Tier 2) ayrıca yapılabilir.
+//   • Davet kontrolü ve rol atama istemcide yapılıyor: bir sunucunun kimliğini (id) bilen giriş yapmış biri,
+//     davet olmadan kendi üyelik belgesini yazabilir ve üyelik belgesine istediği rolü yazabilir.
+//     Bunu da kapatmak için davet doğrulaması/rol kontrolü kurala taşınmalı (Tier 2).
+//   • Giriş yapmış herkes `users` belgelerini okuyabilir (arkadaş arama, üye listesi için gerekli);
+//     bu belgelerde e-posta da var.
+//   • "Misafir" (anonim) giriş açıksa anonim hesaplar da "giriş yapmış" sayılır; yine de sunucu/DM verisine
+//     üyelik olmadan erişemezler.
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ───────── Yardımcılar ─────────
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isServerMember(sid) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/servers/$(sid)/members/$(request.auth.uid));
+    }
+
+    function isServerOwner(sid) {
+      return signedIn()
+        && get(/databases/$(database)/documents/servers/$(sid)).data.ownerId == request.auth.uid;
+    }
+
+    // Sunucunun üyesi ya da sahibi (sunucu oluşturulurken sahibi henüz üye belgesi yazmamıştır)
+    function canManage(sid) {
+      return isServerMember(sid) || isServerOwner(sid);
+    }
+
+    // Güncellemede yalnızca verilen alanlar değişiyor mu?
+    function changesOnly(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    function isDmParticipant(cid) {
+      return signedIn()
+        && request.auth.uid in get(/databases/$(database)/documents/dm_conversations/$(cid)).data.participantIds;
+    }
+
+    // ───────── Kullanıcılar ─────────
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create: if isSelf(uid);
+      // Sahibi her şeyi yazar. Başkası yalnızca moderatörün "sesli kanaldan at" temizliği için
+      // currentRoom / gameActivity alanlarını değiştirebilir.
+      allow update: if isSelf(uid)
+        || (signedIn() && changesOnly(['currentRoom', 'gameActivity']));
+      allow delete: if isSelf(uid);
+
+      // users/{uid}/spatialSettings/* gibi alt belgeler: yalnızca sahibi
+      match /{sub}/{docId} {
+        allow read, write: if isSelf(uid);
+      }
+    }
+
+    // ───────── Sunucular ─────────
+    match /servers/{sid} {
+      // Tek bir sunucuyu okumak: davetle katılmadan önce de gerekir. Listeleme: yalnızca üyesi olduklarım.
+      allow get: if signedIn();
+      allow list: if signedIn() && request.auth.uid in resource.data.memberIds;
+
+      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
+
+      // Üyeler/sahibi ayarları günceller. Katılan, ayrılan ya da atılan kişi yalnızca memberIds / memberCount'u değiştirir.
+      allow update: if canManage(sid)
+        || (signedIn() && changesOnly(['memberIds', 'memberCount']));
+
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+
+      // Sunucunun TÜM alt koleksiyonları (kanallar, mesajlar, roller, davetler, rozetler, watchParty...):
+      // yalnızca üyeler / sahibi.
+      match /{path=**} {
+        allow read, write: if canManage(sid);
+      }
+
+      // Üyelik: katılmadan önce "zaten üye miyim?" kontrolü, kendi üyeliğimi oluşturma (davetle katılma)
+      match /members/{memberId} {
+        allow get: if signedIn();
+        allow create: if isSelf(memberId);
+      }
+
+      // Yasak: katılmadan önce "yasaklı mıyım?" kontrolü yalnızca kendi kaydım için
+      match /bans/{banId} {
+        allow get: if isSelf(banId);
+      }
+    }
+
+    // ───────── Davet kodları (üst düzey) ─────────
+    match /invites/{code} {
+      allow get: if signedIn();            // kodu bilen okuyabilir; tüm kodları listelemek yasak
+      allow list: if false;
+      allow create: if signedIn() && canManage(request.resource.data.serverId);
+      // Katılan kişi kullanım sayısını artırır; üyeler/sahibi başka her şeyi
+      allow update: if signedIn()
+        && (changesOnly(['uses']) || canManage(resource.data.serverId));
+      allow delete: if signedIn() && canManage(resource.data.serverId);
+    }
+
+    // ───────── Arkadaşlıklar ─────────
+    match /friendships/{id} {
+      allow read: if signedIn()
+        && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.senderId == request.auth.uid;
+      allow update, delete: if signedIn()
+        && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
+    }
+
+    // ───────── Direkt mesajlar ─────────
+    match /dm_conversations/{cid} {
+      allow read: if signedIn() && request.auth.uid in resource.data.participantIds;
+      allow create: if signedIn() && request.auth.uid in request.resource.data.participantIds;
+      allow update, delete: if signedIn() && request.auth.uid in resource.data.participantIds;
+
+      match /messages/{mid} {
+        allow read, write: if isDmParticipant(cid);
+      }
+    }
+
+    // ───────── Eski/genel koleksiyonlar (sunucuya bağlı değil) ─────────
+    match /text_channels/{cid} {
+      allow read, write: if signedIn();
+      match /messages/{mid} {
+        allow read, write: if signedIn();
+      }
+    }
+
+    match /rooms/{roomId} {
+      allow read, write: if signedIn();
+    }
+
+    // LiveKit sunucu havuzu (yalnızca aktif sunucu sırası tutuluyor, gizli bilgi yok)
+    match /system/{docId} {
+      allow read, write: if signedIn();
+    }
+
+    // ───────── Masa Atölyesi (3D masa modları) ─────────
+    // Modlar yalnızca VERİdir (JSON + görsel), kod içermez. Veri `parts` alt koleksiyonunda parça parça tutulur.
+    // BİLİNEN SINIR: sayaçlar (indirme/puan/bildirim) istemciden artırılır; kurallar her seferinde yalnızca +1 / makul aralığa izin
+    // verir ama kötü niyetli biri yine de sayıları şişirebilir. Telifli içerik için "bildir" düğmesi var (5 bildirimde liste dışı).
+    match /tabletop_mods/{modId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.downloads == 0
+        && request.resource.data.ratingSum == 0
+        && request.resource.data.ratingCount == 0
+        && request.resource.data.reports == 0
+        && request.resource.data.parts is int
+        && request.resource.data.parts >= 1
+        && request.resource.data.parts <= 6;
+      allow update: if signedIn() && (
+        // yazar: yalnızca durum / açıklama / etiketleri değiştirir
+        (resource.data.authorId == request.auth.uid && changesOnly(['status', 'description', 'tags']))
+        // herkes: indirme sayacını 1 artırır
+        || (changesOnly(['downloads']) && request.resource.data.downloads == resource.data.downloads + 1)
+        // herkes: bildirim sayacını 1 artırır
+        || (changesOnly(['reports']) && request.resource.data.reports == resource.data.reports + 1)
+        // herkes: puan toplamı / adedi (tek puanın izin verdiği aralıkta)
+        || (changesOnly(['ratingSum', 'ratingCount'])
+            && request.resource.data.ratingCount - resource.data.ratingCount >= 0
+            && request.resource.data.ratingCount - resource.data.ratingCount <= 1
+            && request.resource.data.ratingSum - resource.data.ratingSum >= -4
+            && request.resource.data.ratingSum - resource.data.ratingSum <= 5)
+      );
+      allow delete: if signedIn() && resource.data.authorId == request.auth.uid;
+
+      match /parts/{n} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+          && get(/databases/$(database)/documents/tabletop_mods/$(modId)).data.authorId == request.auth.uid
+          && request.resource.data.keys().hasOnly(['i', 'd'])
+          && request.resource.data.d is string
+          && request.resource.data.d.size() <= 750000;
+        allow delete: if signedIn()
+          && get(/databases/$(database)/documents/tabletop_mods/$(modId)).data.authorId == request.auth.uid;
+      }
+
+      match /ratings/{uid} {
+        allow read: if signedIn();
+        allow create, update: if isSelf(uid)
+          && request.resource.data.value is int
+          && request.resource.data.value >= 1
+          && request.resource.data.value <= 5;
+      }
+
+      match /reports/{uid} {
+        allow read: if isSelf(uid);
+        allow create: if isSelf(uid);
+      }
+    }
+
+    // Yukarıda tanımlanmayan her şey kapalı
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
