@@ -1,117 +1,82 @@
-name: Build & Release
+# Netrex Windows kurucusunu (NSIS) derler, güncelleme imzalarını üretir ve GitHub Releases'e TASLAK olarak yükler.
+# Yalnızca elle çalıştırılır (Actions > "Windows sürümü" > Run workflow): push veya PR ile kendiliğinden çalışmaz.
+#
+# Gerekli depo gizlileri (Settings > Secrets and variables > Actions):
+#   TAURI_SIGNING_PRIVATE_KEY  güncelleme paketlerini imzalayan özel anahtar (~/.tauri/netrex-updater.key içeriği)
+#   NETREX_PUBLIC_ENV          .env.local'in YALNIZCA NEXT_PUBLIC_* satırları (Firebase/Cloudinary genel ayarları, sunucu adresi)
+# LiveKit/Cloudinary secret'ları burada ASLA bulunmaz: onlar yalnızca Vercel sunucusunda durur (server/).
+#
+# Sürüm numarası src-tauri/tauri.conf.json içindeki "version" alanından gelir; etiket v<sürüm> olur.
+
+name: Windows sürümü
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
-      platforms:
-        description: "Derlenecek platformlar"
-        type: choice
-        default: all
-        options:
-          - all
-          - windows
-          - macos
-          - linux
-      publish:
-        description: "GitHub Release'e yükle (kapalıysa sadece Actions artifact olarak kalır)"
+      draft:
+        description: "Taslak olarak yayınla (önce kendin dene, sonra Publish et)"
         type: boolean
-        default: false
+        default: true
 
+# Varsayılan olarak hiçbir şeye yazma izni yok; yalnızca sürüm oluşturmak için contents:write
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  plan:
-    name: Platformları belirle
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set.outputs.matrix }}
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write # GitHub Release oluşturmak / dosya yüklemek için
     steps:
-      - id: set
-        shell: bash
-        env:
-          PLATFORMS: ${{ inputs.platforms || 'all' }}
-        run: |
-          node -e '
-            const all = [
-              { name: "Windows (exe)", key: "windows", os: "windows-latest", args: "--win" },
-              { name: "macOS (dmg)", key: "macos", os: "macos-latest", args: "--mac --x64 --arm64" },
-              { name: "Linux (AppImage)", key: "linux", os: "ubuntu-latest", args: "--linux" },
-            ];
-            const p = process.env.PLATFORMS;
-            const include = p === "all" ? all : all.filter((x) => x.key === p);
-            require("fs").appendFileSync(process.env.GITHUB_OUTPUT, "matrix=" + JSON.stringify({ include }) + "\n");
-          '
-
-  build:
-    name: ${{ matrix.name }}
-    needs: plan
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      # Üçüncü taraf action'lar commit SHA'sına sabitlenmiştir (etiket sonradan başka koda çevrilemez).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 20
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
           cache: npm
 
-      - name: Tag ile package.json versiyonu eşleşiyor mu?
-        if: github.ref_type == 'tag'
-        shell: bash
-        run: |
-          PKG="v$(node -p "require('./package.json').version")"
-          if [ "$PKG" != "$GITHUB_REF_NAME" ]; then
-            echo "::error::Tag ($GITHUB_REF_NAME) ile package.json versiyonu ($PKG) uyuşmuyor"
-            exit 1
-          fi
-
-      - name: Bağımlılıkları kur
-        run: npm ci
-
-      - name: .env.local oluştur
-        shell: bash
-        env:
-          ENV_LOCAL: ${{ secrets.ENV_LOCAL }}
-        run: |
-          if [ -z "$ENV_LOCAL" ]; then
-            echo "::error::ENV_LOCAL secret tanımlı değil (Settings > Secrets and variables > Actions)"
-            exit 1
-          fi
-          printf '%s\n' "$ENV_LOCAL" > .env.local
-          node scripts/copy-env.js
-
-      - name: Next.js build
-        run: npm run build
-
-      - name: Derle ve (gerekirse) yayınla
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if [ "${{ github.ref_type }}" = "tag" ] || [ "${{ inputs.publish }}" = "true" ]; then
-            PUBLISH=always
-          else
-            PUBLISH=never
-          fi
-          npx electron-builder ${{ matrix.args }} --publish $PUBLISH
-
-      - name: Artifact olarak yükle
-        uses: actions/upload-artifact@v4
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
-          name: netrex-${{ matrix.key }}
-          if-no-files-found: error
-          retention-days: 14
-          path: |
-            dist/*.exe
-            dist/*.dmg
-            dist/*.zip
-            dist/*.AppImage
-            dist/latest*.yml
-            dist/*.blockmap
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
+        with:
+          workspaces: "src-tauri -> target"
+
+      - name: Genel yapılandırmayı .env.local olarak yaz
+        shell: pwsh
+        env:
+          NETREX_PUBLIC_ENV: ${{ secrets.NETREX_PUBLIC_ENV }}
+        run: |
+          if (-not $env:NETREX_PUBLIC_ENV) { throw "NETREX_PUBLIC_ENV gizlisi tanımlı değil" }
+          [System.IO.File]::WriteAllText(".env.local", $env:NETREX_PUBLIC_ENV)
+          # Güvenlik ağı: yanlışlıkla secret yapıştırılırsa derleme DURSUN (ikili dosyaya gömülmesin).
+          $bad = Get-Content .env.local | Where-Object { $_ -match '^\s*[A-Za-z_0-9]+\s*=' -and $_ -notmatch '^\s*NEXT_PUBLIC_' }
+          if ($bad) { throw "NETREX_PUBLIC_ENV yalnızca NEXT_PUBLIC_ anahtarları içerebilir" }
+          $keys = (Get-Content .env.local | Where-Object { $_ -match '^\s*NEXT_PUBLIC_' }).Count
+          Write-Host "Yapılandırma yazıldı: $keys genel anahtar"
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@1ddc7b49b13c3038297360482fcb3e058764d7c9 # v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+          # Uygulamanın güncelleme kontrol adresi (src-tauri/src/updater.rs derleme zamanında gömer)
+          NETREX_UPDATE_URL: https://github.com/${{ github.repository }}/releases/latest/download/latest.json
+        with:
+          tagName: v__VERSION__
+          releaseName: "Netrex v__VERSION__"
+          releaseBody: "Windows kurucusu: Netrex_<sürüm>_x64-setup.exe dosyasını indirip çalıştırın."
+          releaseDraft: ${{ inputs.draft }}
+          prerelease: false
+          args: --bundles nsis
