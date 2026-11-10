@@ -33,6 +33,7 @@ const SettingsModal = lazy(() => import("@/src/components/SettingsModal"));
 export default function AppShell({ 
   children, 
   sidebar,
+  sidebarFooter = null,
   rightSidebar,
   rightSidebarKey,
   serverRail,
@@ -234,7 +235,8 @@ export default function AppShell({
                    }} 
                    className="w-sidebar h-full flex flex-col"
                 >
-                   {sidebar}
+                   <div className="flex-1 min-h-0">{sidebar}</div>
+                   {sidebarFooter}
                 </motion.div>
               </motion.aside>
             )}

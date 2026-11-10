@@ -23,6 +23,7 @@ import { WelcomeScreen } from "@/src/components/layout";
 // Splash Screen
 import SplashScreen from "@/src/components/SplashScreen";
 import ModalA11yManager from "@/src/components/ModalA11yManager";
+import VoiceConnectedBar from "@/src/components/layout/VoiceConnectedBar";
 import { AppShell } from "@/src/components/layout";
 import ServerRail from "@/src/components/layout/ServerRail";
 import CreateServerModal from "@/src/components/server/CreateServerModal";
@@ -817,6 +818,31 @@ export default function Home() {
     }
   }, [currentRoom, servers, currentServer, currentTextChannel, showChatPanel]);
 
+  // Sesli bağlantı kartı: oda ekranının DIŞINDAYKEN (Mesajlar, başka sunucu) bağlı olduğunu gösterir.
+  // Aynı sunucudayken oda ekranı zaten görünür. DM aramaları kendi ekranında gösterilir, burada yok.
+  const showVoiceBar =
+    !!currentRoom && !currentRoom.isDM && (friendsMode || currentServer?.id !== currentRoom._serverId);
+
+  const handleReturnToRoom = useCallback(() => {
+    if (!currentRoom || currentRoom.isDM) return;
+    setFriendsMode(false);
+    setShowFriendsPanel(false);
+    clearActiveConversation();
+    if (currentRoom._serverId) useServerStore.getState().selectServer(currentRoom._serverId);
+    setCurrentTextChannel(null);
+    setViewMode("voice");
+    useChatStore.getState().setShowChatPanel(false);
+  }, [currentRoom, clearActiveConversation]);
+
+  // ActiveRoom'un kendi "Bağlantıyı Kes" (onLeave) işleviyle AYNI adımlar
+  const handleLeaveFromBar = useCallback(() => {
+    setCurrentRoom(null);
+    setCurrentTextChannel(null);
+    setViewMode("voice");
+    setShowChatPanel(false);
+    useChatStore.getState().clearCurrentChannel();
+  }, [setShowChatPanel]);
+
   const serverSidebarContent = currentServer ? (
     isServerLoading && channels.length === 0 ? (
       <ServerSidebarSkeleton />
@@ -884,6 +910,11 @@ export default function Home() {
               useServerStore.getState().setMobileMemberDrawerOpen(false);
             }} />
           )
+        ) : null
+      }
+      sidebarFooter={
+        showVoiceBar ? (
+          <VoiceConnectedBar room={currentRoom} onReturn={handleReturnToRoom} onLeave={handleLeaveFromBar} />
         ) : null
       }
       rightSidebarKey={currentServer?.id}
