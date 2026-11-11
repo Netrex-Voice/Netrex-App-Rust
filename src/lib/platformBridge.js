@@ -27,7 +27,7 @@ export function isElectron() {
  * @param {number} serverIndex - Sunucu index'i (pool mode)
  * @returns {Promise<string>} JWT token
  */
-export async function getLiveKitToken(room, identity, displayName, serverIndex = 0) {
+async function fetchLiveKitToken(room, identity, displayName, serverIndex = 0) {
   if (isElectron()) {
     return window.netrex.getLiveKitToken(room, identity, displayName, serverIndex);
   }
@@ -52,7 +52,7 @@ export async function getLiveKitToken(room, identity, displayName, serverIndex =
  * @param {number} serverIndex - Sunucu index'i
  * @returns {Promise<{url: string, serverCount: number, serverIndex: number, poolMode: boolean}>}
  */
-export async function getLiveKitServerInfo(serverIndex = 0) {
+async function fetchLiveKitServerInfo(serverIndex = 0) {
   if (isElectron()) {
     return window.netrex.getLiveKitServerInfo(serverIndex);
   }
@@ -65,6 +65,35 @@ export async function getLiveKitServerInfo(serverIndex = 0) {
   }
   
   return res.json();
+}
+
+
+// ------------------------------------------------------------------
+// Odaya girişi hızlandırma: sunucu bilgisi ve token bellek içinde önbelleğe alınır (aynı istek devam ediyorsa paylaşılır).
+// Fare bir sesli odanın üstüne gelince `prefetchJoin` (src/lib/joinPrefetch.js) bunları ÖNCEDEN ısıtır; tıklayınca
+// 2 ağ turu (Vercel/Rust) beklenmez. Hata ÖNBELLEĞE ALINMAZ. Token 24 sa geçerlidir; önbellek ömrü kısa tutulur.
+// ------------------------------------------------------------------
+const INFO_TTL_MS = 10 * 60 * 1000;
+const TOKEN_TTL_MS = 15 * 60 * 1000;
+const infoCache = new Map();
+const tokenCache = new Map();
+
+function memo(map, key, ttl, loader) {
+  const hit = map.get(key);
+  if (hit && Date.now() - hit.at < ttl) return hit.p;
+  const p = loader();
+  map.set(key, { p, at: Date.now() });
+  p.catch(() => map.delete(key));
+  return p;
+}
+
+export function getLiveKitToken(room, identity, displayName, serverIndex = 0) {
+  return memo(tokenCache, `${room}|${identity}|${displayName}|${serverIndex}`, TOKEN_TTL_MS,
+    () => fetchLiveKitToken(room, identity, displayName, serverIndex));
+}
+
+export function getLiveKitServerInfo(serverIndex = 0) {
+  return memo(infoCache, String(serverIndex), INFO_TTL_MS, () => fetchLiveKitServerInfo(serverIndex));
 }
 
 /**

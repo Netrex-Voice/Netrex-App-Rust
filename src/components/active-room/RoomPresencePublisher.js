@@ -13,7 +13,7 @@ import { useRoomPresenceStore } from "@/src/store/roomPresenceStore";
  * Ad / avatar / renk çözümleme sırası OverlayBridge ile aynıdır (metadata > üye kaydı > LiveKit adı).
  * Yalnızca değişince yazar (imza karşılaştırması); odadan çıkınca depoyu temizler.
  */
-export default function RoomPresencePublisher({ roomId, channelName, serverName, isDMCall }) {
+export default function RoomPresencePublisher({ roomId, channelName, serverName, isDMCall, onLeave }) {
   const participants = useParticipants();
   const localUser = useAuthStore((s) => s.user);
   const isMuted = useSettingsStore((s) => s.isMuted);
@@ -24,6 +24,13 @@ export default function RoomPresencePublisher({ roomId, channelName, serverName,
   const members = (isDMCall ? dmParticipants : serverMembers) || [];
 
   const lastSig = useRef("");
+
+  // Odanın KENDİ çıkış işlevini dışarıya aç (çıkış sesi + Firebase oda kaydı/ses durumu temizliği + sayfa durumu).
+  const onLeaveRef = useRef(onLeave);
+  onLeaveRef.current = onLeave;
+  useEffect(() => {
+    useRoomPresenceStore.getState().setLeaveRoom(() => onLeaveRef.current?.());
+  }, []);
 
   useEffect(() => {
     const list = participants.map((p) => {

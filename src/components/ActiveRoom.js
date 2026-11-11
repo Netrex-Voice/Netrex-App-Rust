@@ -71,6 +71,7 @@ import WatchPartyManager from "./active-room/WatchPartyManager";
 import CallInviteModal from "@/src/components/friends/CallInviteModal";
 import OverlayBridge from "./active-room/OverlayBridge";
 import RoomPresencePublisher from "./active-room/RoomPresencePublisher";
+import { getPreferredUrl, measureAndCacheBestRegion, invalidatePreferredUrl } from "@/src/lib/livekitRegion";
 
 // --- STYLES ---
 // Styles moved to active-room/ActiveRoomStyles.js
@@ -873,7 +874,8 @@ export default function ActiveRoom({
               serverPoolModeRef.current = false;
             }
 
-            setServerUrl(currentServerUrl);
+            // En hızlı LiveKit bölgesi (gecikmeye göre ölçülüp hatırlanır; yoksa varsayılan URL): bkz. src/lib/livekitRegion.js
+            setServerUrl(getPreferredUrl(currentServerUrl));
             setServerIndex(currentServerIndex);
             serverIndexRef.current = currentServerIndex; // ✅ Ref'i anında güncelle
 
@@ -901,10 +903,15 @@ export default function ActiveRoom({
           );
           setToken(t);
 
+          // Bağlandıktan SONRA arka planda bölgeleri ölç (girişi geciktirmez); sonraki girişler en hızlı bölgeyi kullanır
+          const baseUrlForProbe = currentServerUrl;
+          setTimeout(() => { measureAndCacheBestRegion(baseUrlForProbe, t).catch(() => {}); }, 6000);
+
           // 20 saniye içinde bağlantı kurulamazsa hata göster
           connectionTimeoutRef.current = setTimeout(() => {
             // Eğer hala bağlanmadıysa hata göster
             if (!hasConnectedOnceRef.current) {
+              invalidatePreferredUrl(currentServerUrl); // sabitlenmiş bölge sorunluysa bir sonraki giriş varsayılana dönsün
               setConnectionError(
                 `Odaya bağlanılamadı (Timeout). URL: ${currentServerUrl}`,
               );
@@ -1669,6 +1676,7 @@ export default function ActiveRoom({
         channelName={roomDisplayName}
         serverName={currentServerName}
         isDMCall={isDMCall}
+        onLeave={handleManualLeave}
       />
       <OverlayBridge
         channelName={roomDisplayName}

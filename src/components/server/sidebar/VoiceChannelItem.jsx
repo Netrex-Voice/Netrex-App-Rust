@@ -1,6 +1,8 @@
 "use client";
 
 import { memo, useMemo, useState } from "react";
+import { prefetchJoin } from "@/src/lib/joinPrefetch";
+import { useAuthStore } from "@/src/store/authStore";
 import { clickable } from "@/src/utils/a11y";
 import { VOICE_GROUPS, DEFAULT_GROUP_ID } from "@/src/store/voiceGroupStore";
 import { Volume2, Signal, Lock } from "lucide-react";
@@ -31,6 +33,13 @@ const VoiceChannelItem = memo(function VoiceChannelItem({
   groupAssignments,           // { [userId]: groupId } — sadece bağlı olduğum kanalda dolu
   myIdentity,
 }) {
+  // Girişi önceden ısıt (fare üstüne gelince / odaklanınca): token + sunucu bilgisi tıklamadan önce hazır olur
+  const authUser = useAuthStore((st) => st.user);
+  const warmJoin = () => {
+    if (isActive || !authUser?.uid) return;
+    prefetchJoin(channel.id, authUser.uid, authUser.displayName || authUser.email || "Misafir");
+  };
+
   // "user": kişi bırakılabilir, "channel": kanal sırası değişecek
   const [dropState, setDropState] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -97,6 +106,8 @@ const VoiceChannelItem = memo(function VoiceChannelItem({
           `${channel.name}, sesli oda, ${participants?.length ? `${participants.length} kişi bağlı` : "boş"}${isActive ? ", bağlısınız" : ""}`,
           { "aria-current": isActive ? "true" : undefined },
         )}
+        onMouseEnter={warmJoin}
+        onFocus={warmJoin}
         onContextMenu={onContextMenu}
         draggable={canReorder}
         onDragStart={

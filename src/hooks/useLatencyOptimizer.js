@@ -106,6 +106,22 @@ export function useLatencyOptimizer() {
         }),
       );
 
+      // Odada başka dinlenen kimse yokken (tek başına) alıcı istatistiği yoktur: kendi mikrofon göndericisinin
+      // aday çiftinden, o da yoksa sinyal bağlantısının RTT'sinden ölç ki gecikme (ms) her zaman görünsün.
+      if (rtt == null) {
+        try {
+          const pubs = Array.from(room.localParticipant?.audioTrackPublications?.values?.() ?? []);
+          const sender = pubs.map((p) => p.track?.sender).find((s) => s && s.getStats);
+          if (sender) {
+            const rep = await sender.getStats();
+            rep.forEach((s) => {
+              if (s.type === "candidate-pair" && s.nominated && s.currentRoundTripTime != null) rtt = s.currentRoundTripTime * 1000;
+            });
+          }
+        } catch { /* yoksay */ }
+        if (rtt == null && typeof room.engine?.client?.rtt === "number" && room.engine.client.rtt > 0) rtt = room.engine.client.rtt;
+      }
+
       // Hedef tamponu güncelle
       const now = Date.now();
       if (floor == null) {

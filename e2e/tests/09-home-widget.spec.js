@@ -52,5 +52,28 @@ test("Ana Sayfa'da sesli oda kutusu", async ({ browser, request }) => {
   await expect(roomControls, "Odaya dön sonrası").toBeVisible({ timeout: 10_000 });
   await expect(widget).toHaveCount(0);
 
+  // KÜÇÜK KUTUDAN çıkış: odanın kendi çıkışı çalışmalı → Firebase'deki oda kaydı ve ses durumu SİLİNMELİ (hayalet kullanıcı kalmasın)
+  const FS_USERS = "http://127.0.0.1:8080/v1/projects/demo-netrex/databases/(default)/documents/users";
+  const RTDB = "http://127.0.0.1:9000";
+  const H = { Authorization: "Bearer owner" };
+  const users = await (await request.get(FS_USERS, { headers: H })).json();
+  const inRoom = async () => JSON.stringify(await (await request.get(`${RTDB}/room_presence.json?ns=demo-netrex`, { headers: H })).json());
+  // Emülatörde önceki testlerden birden çok "Ali" birikmiş olabilir: oda kaydında bulunanı seç
+  const roomNow = await inRoom();
+  const aliUid = (users.documents || [])
+    .filter((d) => d.fields?.username?.stringValue === "Ali" || d.fields?.displayName?.stringValue === "Ali")
+    .map((d) => d.name.split("/").pop())
+    .find((u) => roomNow.includes(u));
+  const voiceState = async () => await (await request.get(`${RTDB}/user_voice_state/${aliUid}.json?ns=demo-netrex`, { headers: H })).json();
+  expect(await inRoom(), "çıkıştan önce Ali oda kaydında olmalı").toContain(aliUid);
+  expect(await voiceState(), "çıkıştan önce ses durumu dolu olmalı").not.toBeNull();
+
+  await A.p.getByRole("button", { name: "Ana Sayfa" }).click();
+  await expect(widget).toBeVisible();
+  await widget.getByRole("button", { name: "Sesli bağlantıyı kes" }).click();
+  await expect(widget).toHaveCount(0, { timeout: 10_000 });
+  await expect.poll(inRoom, { message: "kutudan çıkınca oda kaydı silinmeli", timeout: 10_000 }).not.toContain(aliUid);
+  await expect.poll(voiceState, { message: "kutudan çıkınca ses durumu silinmeli", timeout: 10_000 }).toBeNull();
+
   console.log("HATALAR:", JSON.stringify([...new Set(errors)].slice(0, 8)));
 });

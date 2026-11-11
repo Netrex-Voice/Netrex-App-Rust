@@ -25,6 +25,7 @@ import SplashScreen from "@/src/components/SplashScreen";
 import ModalA11yManager from "@/src/components/ModalA11yManager";
 import VoiceConnectedBar from "@/src/components/layout/VoiceConnectedBar";
 import VoiceMiniWidget from "@/src/components/layout/VoiceMiniWidget";
+import { useRoomPresenceStore } from "@/src/store/roomPresenceStore";
 import { AppShell } from "@/src/components/layout";
 import ServerRail from "@/src/components/layout/ServerRail";
 import CreateServerModal from "@/src/components/server/CreateServerModal";
@@ -840,8 +841,15 @@ export default function Home() {
     useChatStore.getState().setShowChatPanel(false);
   }, [currentRoom, clearActiveConversation]);
 
-  // ActiveRoom'un kendi "Bağlantıyı Kes" (onLeave) işleviyle AYNI adımlar
+  // ODANIN KENDİ çıkış işlevi (çıkış sesi + Firebase oda kaydı ve ses durumu temizliği + onLeave): kart/kutu bunu çağırır.
+  // Yalnızca durumu sıfırlamak çıkış sesini atlıyor ve kullanıcıyı başkalarında "hayalet" bırakıyordu.
   const handleLeaveFromBar = useCallback(() => {
+    const roomLeave = useRoomPresenceStore.getState().leaveRoom;
+    if (roomLeave) {
+      roomLeave();
+      return;
+    }
+    // Yedek (oda henüz yayıncıyı kaydetmediyse): yalnızca sayfa durumu
     setCurrentRoom(null);
     setCurrentTextChannel(null);
     setViewMode("voice");
