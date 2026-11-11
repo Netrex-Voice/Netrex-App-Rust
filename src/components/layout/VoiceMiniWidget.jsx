@@ -15,13 +15,14 @@ const MiniPerson = memo(function MiniPerson({ p }) {
   return (
     <li
       title={p.displayName + (p.isMuted ? " (mikrofon kapalı)" : "")}
-      className={`relative flex w-16 shrink-0 flex-col items-center transition-transform duration-200 ${speaking ? "z-10 scale-105" : ""}`}
+      className={`relative flex w-12 shrink-0 flex-col items-center transition-transform duration-200 ${speaking ? "z-10 scale-105" : ""}`}
     >
       <div
         className={`rounded-full ring-[3px] transition-all duration-200 [&_div]:!rounded-full ${
-          speaking ? "ring-emerald-400 shadow-[0_0_16px_rgba(52,211,153,0.6)]" : "ring-[#111214]"
+          speaking ? "ring-emerald-400 shadow-[0_0_16px_rgba(52,211,153,0.6)]" : "ring-black/40"
         }`}
       >
+        <div style={{ zoom: 0.75 }}>
         <Avatar
           size="xl"
           uid={p.userId}
@@ -33,8 +34,9 @@ const MiniPerson = memo(function MiniPerson({ p }) {
           muted={p.isMuted}
           deafened={p.isDeafened}
         />
+        </div>
       </div>
-      <span aria-hidden="true" className="mt-1 w-14 truncate text-center text-[11px] font-semibold text-[#dbdee1]">
+      <span aria-hidden="true" className="mt-1 w-12 truncate text-center text-[10px] font-semibold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">
         {p.displayName}
       </span>
       <span className="sr-only">
@@ -68,7 +70,7 @@ function VoiceMiniWidget({ room, onReturn, onLeave }) {
     <section
       role="region"
       aria-label="Sesli oda"
-      className="absolute bottom-4 right-4 z-[70] max-w-[calc(100%-2rem)] rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-emerald-500/10 via-[#111214]/95 to-[#111214]/95 p-3 shadow-[0_8px_28px_rgba(0,0,0,0.5)] backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-300"
+      className="absolute bottom-4 right-4 z-[70] max-w-[calc(100%-2rem)] animate-in fade-in slide-in-from-bottom-2 duration-300"
     >
       <div className="flex items-center gap-2">
         <button
@@ -76,13 +78,13 @@ function VoiceMiniWidget({ room, onReturn, onLeave }) {
           onClick={onReturn}
           aria-label={`Odaya dön: ${room.name}`}
           title={`Odaya dön (${room.name})`}
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-left transition-colors hover:bg-emerald-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+          className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
         >
           <span className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
           </span>
-          <span className="min-w-0 flex-1 truncate text-sm font-extrabold uppercase tracking-wide text-emerald-300">{title}</span>
+          <span className="min-w-0 flex-1 truncate text-xs font-extrabold uppercase tracking-wide text-emerald-300 [text-shadow:0_1px_4px_rgba(0,0,0,0.9)]">{title}</span>
           {isMuted && (
             <span title="Mikrofon kapalı" className="text-red-300">
               <MicOff size={13} aria-hidden="true" />
@@ -101,19 +103,19 @@ function VoiceMiniWidget({ room, onReturn, onLeave }) {
           onClick={onLeave}
           aria-label="Sesli bağlantıyı kes"
           title="Bağlantıyı kes"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-red-500/30 bg-red-500/15 text-red-300 transition-colors hover:bg-red-500/35 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-red-500/80 text-white shadow-[0_2px_8px_rgba(0,0,0,0.5)] transition-colors hover:bg-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300/70"
         >
-          <PhoneOff size={16} aria-hidden="true" />
+          <PhoneOff size={14} aria-hidden="true" />
         </button>
       </div>
 
-      <ul className="mt-3 flex items-start -space-x-4" aria-label="Odadakiler">
+      <ul className="mt-2 flex items-start justify-end -space-x-3" aria-label="Odadakiler">
         {visible.map((p) => (
           <MiniPerson key={p.userId} p={p} />
         ))}
         {extra > 0 && (
-          <li className="relative flex w-16 shrink-0 flex-col items-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#2b2d31] text-sm font-bold text-[#b5bac1] ring-[3px] ring-[#111214]">
+          <li className="relative flex w-12 shrink-0 flex-col items-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#2b2d31] text-xs font-bold text-[#b5bac1] ring-[3px] ring-black/40">
               +{extra}
             </div>
           </li>
