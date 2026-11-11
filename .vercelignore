@@ -1,0 +1,14 @@
+# Web sürümü (Vercel) yüklemesine girmeyecekler: gizliler, masaüstü derlemesi, test araçları, büyük klasörler
+.env*
+node_modules
+out
+.next
+src-tauri
+Netrex-Portable
+tools
+e2e
+server
+_reference
+docs
+*.log
+release_*.md
