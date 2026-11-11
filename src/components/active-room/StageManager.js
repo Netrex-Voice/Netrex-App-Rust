@@ -512,7 +512,10 @@ function ActiveSpeakerColor({ onColorChange }) {
 
 // 🔁 Ekran paylaşımı veya kamera kapanıp (ekran değişimi, kısa ara, yeniden başlatma) aynı kişiden
 // tekrar açılırsa, onu izleyenler otomatik olarak eski düzenle devam eder. Bu süre içinde geri gelmesi yeterli.
-const RESUME_GRACE_MS = 10 * 60_000; // 10 dakika
+const RESUME_GRACE_MS = 60_000; // 1 dakika (eskiden 10 dk: çok uzundu)
+// Tam ekrandaki yayın kaybolursa (yayıncı kapatıp yeniden açabilir) en çok bu kadar beklenir; gelirse aynı yayın otomatik
+// yeniden tam ekran olur, gelmezse tam ekrandan ÇIKILIR. Bekleme sırasındaki bilgi kutusu arayüzü engellemez.
+const FULLSCREEN_LOST_GRACE_MS = RESUME_GRACE_MS;
 
 // 🖥️ Tam ekran, tek bir yayın öğesinde DEĞİL, sahne kökünde (StageManager) tutulur.
 // Neden: yayın kapanınca öğe DOM'dan silinir ve tarayıcı tam ekranı kendiliğinden bozar; geri gelince de tam ekranı
@@ -885,9 +888,9 @@ function StageManager({
     const guard = setInterval(() => {
       const id = stageFs.id;
       if (!id) return;
-      const waiting = resumeRef.current.has(id) && Date.now() - resumeRef.current.get(id).lostAt < RESUME_GRACE_MS;
+      const waiting = resumeRef.current.has(id) && Date.now() - resumeRef.current.get(id).lostAt < FULLSCREEN_LOST_GRACE_MS;
       if (!pinnedRef.current.includes(id) && !waiting) stageFs.exit();
-    }, 2500);
+    }, 1000);
     return () => {
       document.removeEventListener("fullscreenchange", onChange);
       clearInterval(guard);
@@ -977,17 +980,19 @@ function StageManager({
       className="flex-1 flex overflow-hidden min-h-0 relative bg-gradient-to-br from-[#1a1b1f] via-[#141518] to-[#0e0f12]"
     >
       {fsActiveId && !(pinnedStreamIds || []).includes(fsActiveId) && (
-        <div className="absolute inset-0 z-[55] flex flex-col items-center justify-center gap-3 bg-black/85 text-white">
-          <div className="w-10 h-10 rounded-full border-2 border-white/20 border-t-indigo-400 animate-spin" />
-          <div className="text-sm font-semibold">Yayın bekleniyor…</div>
-          <div className="text-xs text-[#949ba4]">Yayın geri gelince otomatik olarak tam ekrana döner.</div>
-          <button
-            type="button"
-            onClick={() => stageFs.exit()}
-            className="mt-1 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold transition"
-          >
-            Tam ekrandan çık
-          </button>
+        // Engellemeyen küçük bilgi: arayüz kilitlenmez, tıklamalar altına geçer; yayın 1 dk içinde gelmezse tam ekrandan çıkılır
+        <div className="pointer-events-none absolute top-4 left-1/2 z-[55] -translate-x-1/2">
+          <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-white/10 bg-black/70 px-4 py-2 text-white shadow-lg backdrop-blur-md">
+            <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-indigo-400 animate-spin" />
+            <span className="text-xs font-semibold">Yayın bekleniyor… (en fazla 1 dk)</span>
+            <button
+              type="button"
+              onClick={() => stageFs.exit()}
+              className="rounded-lg bg-white/10 px-3 py-1 text-[11px] font-bold transition hover:bg-white/20"
+            >
+              Tam ekrandan çık
+            </button>
+          </div>
         </div>
       )}
       <ActiveSpeakerColor onColorChange={setActiveSpeakerColor} />
@@ -2360,7 +2365,9 @@ function ScreenShareStage({
             "video-track"
           }
           trackRef={trackRef}
-          className="max-w-full max-h-full object-contain shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+          // w-full h-full: video kendi doğal boyutunda KALMAZ, alanı doldurur (eskiden 720p yayın geniş sahnede küçük kalıp
+          // yanlarında boş gri alan bırakıyordu); en-boy oranı object-contain ile korunur
+          className="w-full h-full object-contain"
           style={{
             // Kamera track'i için ayna efekti sadece yerel katılımcıya uygula
             transform:

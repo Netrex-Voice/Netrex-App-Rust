@@ -71,6 +71,7 @@ import WatchPartyManager from "./active-room/WatchPartyManager";
 import CallInviteModal from "@/src/components/friends/CallInviteModal";
 import OverlayBridge from "./active-room/OverlayBridge";
 import RoomPresencePublisher from "./active-room/RoomPresencePublisher";
+import ScreenShareAudioGate from "./active-room/ScreenShareAudioGate";
 import { getPreferredUrl, measureAndCacheBestRegion, invalidatePreferredUrl } from "@/src/lib/livekitRegion";
 
 // --- STYLES ---
@@ -1660,6 +1661,7 @@ export default function ActiveRoom({
     >
       <MemoizedBackground disableEffects={disableBackgroundEffects} />
       <RemoteMicrophonePlayer />
+      <ScreenShareAudioGate pinnedStreamIds={pinnedStreamIds} />
       <GlobalChatListener
         showChatPanel={showChatPanel}
         setShowChatPanel={setShowChatPanel}
