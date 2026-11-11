@@ -1,14 +1,14 @@
-# Web sürümü (Vercel) yüklemesine girmeyecekler: gizliler, masaüstü derlemesi, test araçları, büyük klasörler
+# Web sürümü (Vercel) yüklemesine girmeyecekler. Başındaki "/" kök klasöre sabitler:
+# "/server" yalnızca kökteki API klasörüdür; "server" yazsaydı src/components/server de silinirdi.
 .env*
-node_modules
-out
-.next
-src-tauri
-Netrex-Portable
-tools
-e2e
-server
-_reference
-docs
+/out
+/.next
+/src-tauri
+/Netrex-Portable
+/tools
+/e2e
+/server
+/_reference
+/docs
+/release_*.md
 *.log
-release_*.md
