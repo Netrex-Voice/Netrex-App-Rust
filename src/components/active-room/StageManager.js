@@ -1538,6 +1538,8 @@ function StageManager({
           // Kişiler paneli gizliyse sohbet tüm alanı kaplar; kontrol çubuğu altta kalsın diye altta boşluk bırakılır
           width: shouldShowChat ? (showVoicePanel ? `${chatWidth}px` : "100%") : "0px",
           paddingBottom: shouldShowChat && !showVoicePanel && !controlBarHidden ? "104px" : 0,
+          // Kontrol çubuğu için ayrılan alt boşluk sohbetin kendi zemin rengiyle aynı olsun (eskiden gri şerit kalıyordu)
+          backgroundColor: shouldShowChat && !showVoicePanel && !controlBarHidden ? "#0e0f12" : undefined,
           flexShrink: 0,
           transform:
             shouldShowChat

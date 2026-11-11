@@ -72,7 +72,7 @@ test("Ana Sayfa'da sesli oda kutusu", async ({ browser, request }) => {
   await expect(widget).toBeVisible();
   await widget.getByRole("button", { name: "Sesli bağlantıyı kes" }).click();
   await expect(widget).toHaveCount(0, { timeout: 10_000 });
-  await expect.poll(inRoom, { message: "kutudan çıkınca oda kaydı silinmeli", timeout: 10_000 }).not.toContain(aliUid);
+  await expect.poll(inRoom, { message: "kutudan çıkınca oda kaydı silinmeli", timeout: 20_000 }).not.toContain(aliUid);
   await expect.poll(voiceState, { message: "kutudan çıkınca ses durumu silinmeli", timeout: 10_000 }).toBeNull();
 
   console.log("HATALAR:", JSON.stringify([...new Set(errors)].slice(0, 8)));

@@ -82,18 +82,8 @@ export default function ChatView({ channelId, username, userId }) {
   
   const virtuosoRef = useRef(null);
 
-  // Otomatik scroll yönetimi (Atlama yapmayan temiz çözüm)
-  useEffect(() => {
-    if (messages.length > 0) {
-      const timer = setTimeout(() => {
-        const anchor = document.getElementById('chat-bottom-anchor');
-        if (anchor) {
-          anchor.scrollIntoView({ behavior: 'auto', block: 'end' });
-        }
-      }, 200); // Layout'un tam oturması için yeterli süre
-      return () => clearTimeout(timer);
-    }
-  }, [messages.length]);
+  // Otomatik kaydırma Virtuoso'nun kendisinde (initialTopMostItemIndex + followOutput); elle scrollIntoView kaldırıldı:
+  // listeyle çakışıp titremeye ve üst kapların kaymasına yol açıyordu.
   
   // Image Viewer Manipulation States
   const [imgZoom, setImgZoom] = useState(1);

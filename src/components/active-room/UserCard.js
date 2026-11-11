@@ -14,7 +14,7 @@ import {
   VideoTrack,
 } from "@livekit/components-react";
 import { Track } from "livekit-client";
-import { Tv, Maximize, VolumeX, MicOff, Clock, ShieldAlert, Loader2 } from "lucide-react";
+import { Maximize, VolumeX, MicOff, Clock, ShieldAlert, Loader2, Play } from "lucide-react";
 import { isMicConnectingAttr } from "@/src/utils/micConnectingAttr";
 import { useSettingsStore } from "@/src/store/settingsStore";
 import { useSpeakingStore } from "@/src/store/speakingStore";
@@ -433,9 +433,8 @@ const UserCard = ({
                     );
                   }}
                 >
-                  <div className="bg-[#5865f2] text-white px-3 py-1.5 rounded-full font-bold text-[11px] sm:text-xs tracking-wide flex items-center gap-1.5 shadow-[0_4px_14px_rgba(88,101,242,0.4)] transform translate-y-2 group-hover/camera:translate-y-0 transition duration-300 hover:bg-[#4752c4] hover:scale-105">
-                    <Tv size={13} strokeWidth={2.5} />
-                    Yayını İzle
+                  <div role="button" aria-label="Yayını izle" title="Yayını izle" className="w-12 h-12 rounded-full bg-[#5865f2] text-white flex items-center justify-center shadow-[0_4px_18px_rgba(88,101,242,0.5)] transform scale-90 group-hover/camera:scale-100 transition duration-300 hover:bg-[#4752c4] hover:scale-110">
+                    <Play size={22} fill="currentColor" strokeWidth={0} className="ml-0.5" />
                   </div>
                 </div>
               )}
@@ -521,9 +520,8 @@ const UserCard = ({
                     );
                   }}
                 >
-                  <div className="bg-[#5865f2] text-white px-3 py-1.5 rounded-full font-bold text-[11px] sm:text-xs tracking-wide flex items-center gap-1.5 shadow-[0_4px_14px_rgba(88,101,242,0.4)] transform translate-y-2 group-hover/avatar:translate-y-0 transition duration-300 hover:bg-[#4752c4] hover:scale-105">
-                    <Tv size={13} strokeWidth={2.5} />
-                    Yayını İzle
+                  <div role="button" aria-label="Yayını izle" title="Yayını izle" className="w-12 h-12 rounded-full bg-[#5865f2] text-white flex items-center justify-center shadow-[0_4px_18px_rgba(88,101,242,0.5)] transform scale-90 group-hover/avatar:scale-100 transition duration-300 hover:bg-[#4752c4] hover:scale-110">
+                    <Play size={22} fill="currentColor" strokeWidth={0} className="ml-0.5" />
                   </div>
                 </div>
               )}
