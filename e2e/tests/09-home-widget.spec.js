@@ -36,16 +36,16 @@ test("Ana Sayfa'da sesli oda kutusu", async ({ browser, request }) => {
   await A.p.getByRole("button", { name: "Ana Sayfa" }).click();
   await expect(A.p.getByText("Hoş Geldin, Ali"), "gerçek Ana Sayfa görünmeli").toBeVisible({ timeout: 10_000 });
   await expect(widget, "küçük oda kutusu").toBeVisible();
-  await expect(widget.getByText("genel-sohbet")).toBeVisible();
-  await expect(widget.getByText("Ali"), "kutuda kendisi").toBeVisible();
-  await expect(widget.getByText("Veli"), "kutuda diğer kişi").toBeVisible();
+  await expect(widget.getByText("Kutu Testi").first()).toBeVisible();
+  await expect(widget.getByText("Ali").first(), "kutuda kendisi").toBeVisible();
+  await expect(widget.getByText("Veli").first(), "kutuda diğer kişi").toBeVisible();
   await expect(roomControls, "oda kontrolleri Ana Sayfa'da gizli").toHaveCount(0);
   await A.p.screenshot({ path: "e2e/.output/ana-sayfa-kutu.png" });
 
   // Veli odadan çıkınca kutu güncellenir
   await B.p.getByRole("button", { name: "Bağlantıyı Kes", exact: true }).click();
   await expect(widget.getByText("Veli"), "Veli çıkınca kutudan gitmeli").toHaveCount(0, { timeout: 15_000 });
-  await expect(widget.getByText("Ali")).toBeVisible();
+  await expect(widget.getByText("Ali").first()).toBeVisible();
 
   // Odaya dön
   await widget.getByRole("button", { name: "Odaya dön" }).click();

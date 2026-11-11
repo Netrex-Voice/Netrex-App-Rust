@@ -52,7 +52,8 @@ export default function RoomPresencePublisher({ roomId, channelName, serverName,
     const sig = JSON.stringify([roomId, channelName, serverName, list]);
     if (sig === lastSig.current) return;
     lastSig.current = sig;
-    useRoomPresenceStore.getState().publish({ roomId, channelName: channelName || "", serverName: serverName || "", participants: list });
+    useRoomPresenceStore.getState().publish({ roomId, channelName: channelName || "", // Ana Sayfa'da currentServer boştur: sunucu adı boş gelirse son bilinen adı koru
+      serverName: serverName || useRoomPresenceStore.getState().serverName || "", participants: list });
   }, [participants, members, localUser, isMuted, isDeafened, localColor, roomId, channelName, serverName]);
 
   // Odadan çıkınca temizle
