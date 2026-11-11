@@ -27,14 +27,26 @@ export function isElectron() {
  * @param {number} serverIndex - Sunucu index'i (pool mode)
  * @returns {Promise<string>} JWT token
  */
+// Web sürümünde (tarayıcı) API ayrı bir Vercel projesindedir (server/): adres derleme zamanında verilir ve istekler
+// Firebase girişinin kimlik belirteciyle yapılır (masaüstü uygulamasıyla aynı yol). Adres yoksa eski göreli yola düşer.
+const WEB_API_URL = (process.env.NEXT_PUBLIC_NETREX_API_URL || '').replace(/\/+$/, '');
+
+async function webAuthHeaders() {
+  if (!WEB_API_URL) return {};
+  const { auth } = await import('@/src/lib/firebase');
+  const user = auth.currentUser;
+  if (!user) throw new Error('Giriş yapılmamış');
+  return { Authorization: `Bearer ${await user.getIdToken()}` };
+}
+
 async function fetchLiveKitToken(room, identity, displayName, serverIndex = 0) {
   if (isElectron()) {
     return window.netrex.getLiveKitToken(room, identity, displayName, serverIndex);
   }
   
-  const res = await fetch('/api/livekit-token', {
+  const res = await fetch(`${WEB_API_URL}/api/livekit-token`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await webAuthHeaders()) },
     body: JSON.stringify({ room, identity, displayName, serverIndex }),
   });
   
@@ -57,7 +69,9 @@ async function fetchLiveKitServerInfo(serverIndex = 0) {
     return window.netrex.getLiveKitServerInfo(serverIndex);
   }
   
-  const res = await fetch(`/api/livekit-server-info?serverIndex=${serverIndex}`);
+  const res = await fetch(`${WEB_API_URL}/api/livekit-server-info?serverIndex=${serverIndex}`, {
+    headers: await webAuthHeaders(),
+  });
   
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Server info request failed' }));

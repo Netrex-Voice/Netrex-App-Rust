@@ -272,10 +272,18 @@ export const deleteImageFromCloudinary = async (imageUrl) => {
             // Masaüstü (Tauri): istek Rust'ta imzalanıp doğrudan Cloudinary'ye gider (/api route'u yok)
             result = await window.netrex.deleteCloudinaryImage(public_id);
         } else {
-            const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+            // Web: API ayrı Vercel projesinde (NEXT_PUBLIC_NETREX_API_URL) ve Firebase kimliğiyle çağrılır
+            const apiBase = (process.env.NEXT_PUBLIC_NETREX_API_URL || '').replace(/\/+$/, '');
+            const baseUrl = apiBase || (typeof window !== 'undefined' ? window.location.origin : '');
+            const authHeaders = {};
+            if (apiBase) {
+                const { auth } = await import('@/src/lib/firebase');
+                const idToken = await auth.currentUser?.getIdToken();
+                if (idToken) authHeaders.Authorization = `Bearer ${idToken}`;
+            }
             const response = await fetch(`${baseUrl}/api/cloudinary-delete`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...authHeaders },
                 body: JSON.stringify({ public_id })
             });
 
