@@ -2269,6 +2269,9 @@ function ScreenShareStage({
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    // Kap (tam ekranda portal) yeniden oluşmuş olabilir: yeni kapta imleç/katman görünür başlasın
+    setShowOverlay(true);
+    setShowCursor(true);
 
     const handleMouseMove = () => {
       // 🚀 THROTTLE: 200ms aralıklarla işle (CPU Optimizasyonu v5.3)
@@ -2317,7 +2320,9 @@ function ScreenShareStage({
         clearTimeout(cursorTimeoutRef.current);
       }
     };
-  }, []);
+    // isFullscreen: tam ekrana girip çıkınca kap öğesi değişir; dinleyiciler yeniden bağlanmalı (aksi halde imleç bir kez
+    // gizlenince bir daha geri gelmiyordu)
+  }, [isFullscreen]);
 
   const remoteState = useMemo(() => {
     try {
@@ -2336,8 +2341,10 @@ function ScreenShareStage({
       data-stage-container
       data-stream-id={myStreamId}
       onContextMenu={onContextMenuProp}
-      className={`flex flex-col bg-gradient-to-br from-[#1a1b1f] via-[#141518] to-[#0e0f12] relative overflow-hidden ${
-        fullscreenHost ? "absolute inset-0 z-[60]" : "h-full w-full"
+      // DİKKAT: konum sınıfı (relative/absolute) tek yerden gelmeli. İkisi birlikte yazılınca Tailwind'de "relative"
+      // kazanıp tam ekranda sahneyi üst katman yapmıyor, yan yana duran bir kutuya çeviriyordu (arayüz yamuluyordu).
+      className={`flex flex-col bg-gradient-to-br from-[#1a1b1f] via-[#141518] to-[#0e0f12] overflow-hidden ${
+        fullscreenHost ? "absolute inset-0 z-[60]" : "relative h-full w-full"
       }`}
     >
       {/* Ambient background orbs - only in non-compact mode */}
