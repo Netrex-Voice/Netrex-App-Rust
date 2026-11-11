@@ -10,7 +10,7 @@ Netrex, Discord benzeri bir sesli sohbet ve mesajlaşma uygulamasıdır. Bu sür
 
 **Gereksinim:** Windows 10 veya 11 (64 bit). WebView2 Windows 11'de yerleşiktir, Windows 10'da kurucu gerekirse kendisi indirir.
 
-**Doğrulama (SHA-256):** `9c9940bbb2f8df83c8233dd1365d583930e587d8c1d38ca2901ad6e4e4c2ec7e`
+**Doğrulama (SHA-256):** `9c15f30db0901f1fcc83f17e28500283be7d681b51359c3bf1cb197725e535d4`
 PowerShell'de `Get-FileHash .\Netrex_0.0.1_x64-setup.exe` çıktısı bununla aynı olmalı.
 
 **Eski Electron sürümünü kullanıyorsan:** Önce onu **Ayarlar → Uygulamalar**'dan kaldırmanı öneririz. İkisi de aynı klasöre kurulmaya çalışır. Eski sürümdeki ayarların (kısayollar vb.) ilk açılışta otomatik içe aktarılması hedeflendi. İlk açılışta bir kez yeniden giriş yapman gerekebilir.
