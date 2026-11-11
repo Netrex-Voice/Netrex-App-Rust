@@ -109,7 +109,11 @@ export default function RailUserPanel() {
 
         {/* Avatar Trigger */}
         <button
+          type="button"
           onClick={handleAvatarClick}
+          aria-label="Profil menüsü (durum, ayarlar, çıkış)"
+          aria-haspopup="menu"
+          aria-expanded={!!showMenu}
           className={`group relative w-12 h-12 transition-all duration-300 ${
             showMenu ? "scale-105" : "hover:scale-105"
           }`}
