@@ -13,7 +13,7 @@ import { getPreferredUrl } from "@/src/lib/livekitRegion";
  */
 const lastRun = new Map(); // roomId -> zaman (aynı oda için art arda tetiklemeyi sınırla)
 
-export function prefetchJoin(roomId, userId, username) {
+export function prefetchJoin(roomId, userId, username, serverId = null) {
   if (!roomId || !userId) return;
   const now = Date.now();
   if (now - (lastRun.get(roomId) || 0) < 60_000) return;
@@ -29,7 +29,7 @@ export function prefetchJoin(roomId, userId, username) {
         if (typeof a === "number" && a >= 0 && a < (info0.serverCount || 1)) index = a;
       }
       const info = index === 0 ? info0 : await getLiveKitServerInfo(index);
-      await getLiveKitToken(roomId, userId, username, index);
+      await getLiveKitToken(roomId, userId, username, index, serverId);
       // LiveKit sunucusuna DNS + TLS'i ısıt (WebSocket el sıkışması ~1 gidiş-dönüş daha kısa olur)
       const url = info && info.url ? getPreferredUrl(info.url) : null;
       if (url && /^wss:/.test(url)) { // yalnızca TLS'li adresler (yerel ws:// test sunucusunda ısıtılacak TLS yok)

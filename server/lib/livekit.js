@@ -27,12 +27,12 @@ export function pickServer(servers, index) {
   return { index: i, server: servers[i] };
 }
 
-/** 24 saatlik oda token'ı. `identity` çağıran tarafından DOĞRULANMIŞ kullanıcı kimliği olmalıdır. */
+/** 6 saatlik oda token'ı (yalnızca bağlanırken gerekir; oturum sürerken LiveKit kendisi yeniler). `identity` çağıran tarafından DOĞRULANMIŞ kullanıcı kimliği olmalıdır. */
 export async function makeToken(server, { room, identity, name }) {
   const at = new AccessToken(server.key, server.secret, {
     identity,
     name,
-    ttl: "24h",
+    ttl: "6h",
     // Katılımcı odaya girer girmez diğerleri "bağlanıyor" görsün (mikrofon hazır olunca istemci temizler).
     // Anahtar adı: src/utils/micConnectingAttr.js ile aynı olmalı.
     attributes: { netrexMicConnecting: "1" },

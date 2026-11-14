@@ -8,10 +8,13 @@
 import { Plus, Compass, ChevronRight, Crown, Shield } from "lucide-react";
 import { useServerStore } from "@/src/store/serverStore";
 import { useAuthStore } from "@/src/store/authStore";
+import { useShallow } from "zustand/react/shallow";
 
 export default function MobileServerSelector({ onSelectServer, onCreateServer, onClose }) {
-  const { servers, currentServer } = useServerStore();
-  const { user } = useAuthStore();
+  const { servers, currentServer } = useServerStore(
+    useShallow((s) => ({ servers: s.servers, currentServer: s.currentServer })),
+  );
+  const user = useAuthStore((s) => s.user);
 
   const handleSelect = (serverId) => {
     onSelectServer(serverId);

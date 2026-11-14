@@ -17,7 +17,8 @@ import {
   arrayRemove,
   setDoc,
   documentId,
-  writeBatch
+  writeBatch,
+  increment
 } from "firebase/firestore";
 import { ref, onValue, off } from "firebase/database";
 import { auth, db, rtdb } from "@/src/lib/firebase";
@@ -51,6 +52,80 @@ function batchedSet(set, gen, patch) {
     pendingPatch = null;
     if (p && gen === serverGen) set(p);
   });
+}
+
+// ── İzin dizini (servers/{sid}/meta/perms) ───────────────────────────────
+// Firestore kuralları bir koleksiyonu dolaşamadığından "hangi izin hangi rollerde" bilgisini tek belgeden okur
+// (bkz. firestore.rules). Roller her değiştiğinde bu belge yeniden hesaplanır ve farklıysa yazılır. Yalnızca sunucu
+// sahibi ya da MANAGE_ROLES izni olan üye yazabilir; diğerlerinde hiç denenmez.
+export function buildPermsIndex(roles) {
+  const index = {};
+  (roles || []).forEach((role) => {
+    (role.permissions || []).forEach((perm) => {
+      if (typeof perm !== "string" || !perm) return;
+      (index[perm] = index[perm] || []).push(role.id);
+    });
+  });
+  Object.keys(index).forEach((k) => index[k].sort());
+  return index;
+}
+
+const canonicalPerms = (index) =>
+  JSON.stringify(Object.keys(index || {}).sort().map((k) => [k, [...(index[k] || [])].sort()]));
+
+const permsSyncState = new Map(); // serverId -> son bilinen dizin (kanonik metin) | "pending"
+
+async function syncPermsIndex(serverId, roles, get) {
+  const uid = auth.currentUser?.uid;
+  const state = get();
+  const server = state.currentServer?.id === serverId
+    ? state.currentServer
+    : state.servers.find((s) => s.id === serverId);
+  if (!uid || !server) return;
+  const myRoles = state.members.find((m) => (m.id || m.userId) === uid)?.roles || [];
+  const canManage = server.ownerId === uid
+    || roles.some((r) => myRoles.includes(r.id) && (r.permissions || []).includes("MANAGE_ROLES"));
+  if (!canManage) return;
+
+  const next = buildPermsIndex(roles);
+  const nextKey = canonicalPerms(next);
+  const known = permsSyncState.get(serverId);
+  if (known === nextKey || known === "pending") return;
+  permsSyncState.set(serverId, "pending");
+  try {
+    const ref = doc(db, "servers", serverId, "meta", "perms");
+    if (known === undefined) {
+      const snap = await getDoc(ref);
+      if (snap.exists() && canonicalPerms(snap.data()) === nextKey) {
+        permsSyncState.set(serverId, nextKey);
+        return;
+      }
+    }
+    await setDoc(ref, next);
+    permsSyncState.set(serverId, nextKey);
+  } catch (e) {
+    permsSyncState.delete(serverId);
+    console.warn("İzin dizini eşitlenemedi:", e?.code || e);
+  }
+}
+
+// Tahmin edilemeyen davet kodu (Math.random tahmin edilebilir)
+function randomInviteCode(length = 10) {
+  const alphabet = "abcdefghijkmnpqrstuvwxyz23456789";
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
+}
+
+// Bir koleksiyonun tüm belgelerini 400'lük toplu işlemlerle siler
+async function deleteAll(q) {
+  const snapshot = await getDocs(q);
+  for (let i = 0; i < snapshot.docs.length; i += 400) {
+    const batch = writeBatch(db);
+    snapshot.docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
+  return snapshot.docs;
 }
 
 export const useServerStore = create((set, get) => ({
@@ -164,6 +239,7 @@ export const useServerStore = create((set, get) => ({
         collection(db, "servers", serverId, "channels")
       );
       const unsubChannels = onSnapshot(channelsQ, (snapshot) => {
+        if (gen !== serverGen) return; // başka sunucuya geçildi
         const channels = snapshot.docs
             .map(d => ({ id: d.id, ...d.data() }))
             .sort((a, b) => (a.position || 0) - (b.position || 0));
@@ -220,6 +296,8 @@ export const useServerStore = create((set, get) => ({
             .map(d => ({ id: d.id, ...d.data() }))
             .sort((a, b) => (b.position || 0) - (a.position || 0)); // Descending for roles
         batchedSet(set, gen, { roles });
+        // Güvenlik kurallarının okuduğu izin dizinini (meta/perms) rollerle eşit tut (yalnızca yetkiliysem yazarım)
+        if (gen === serverGen) syncPermsIndex(serverId, roles, get);
       }, (error) => {
         console.error("Roles listener error:", error);
       });
@@ -238,7 +316,10 @@ export const useServerStore = create((set, get) => ({
         // Auto-repair: Sadece ilk snapshot'ta, sadece bir kez çalış
         if (!autoRepairDone) {
           autoRepairDone = true;
-          const membersNeedingRepair = members.filter(m => !m.displayName || m.displayName === "User");
+          // Yalnızca kendi üyelik kaydım (kurallar başkasının kaydını düzeltmeye izin vermez)
+          const myUid = auth.currentUser?.uid;
+          const membersNeedingRepair = members.filter(
+            m => (m.id || m.userId) === myUid && (!m.displayName || m.displayName === "User"));
           
           if (membersNeedingRepair.length > 0) {
             Promise.all(membersNeedingRepair.map(async (member) => {
@@ -287,30 +368,39 @@ export const useServerStore = create((set, get) => ({
       };
 
       // ✅ FIX: getDoc sonucunu bekle ve TEK set() ile tüm listener'ları birlikte kaydet
-      const serverDoc = await serverDocPromise;
-      if (!serverDoc.exists()) {
-        // Cleanup listeners we just started
-        unsubChannels();
-        unsubRoles();
-        unsubMembers();
-        unsubBadges();
-        set({ error: "Server not found", isLoading: false, currentServer: null });
-        return; 
-      }
-
-      // ✅ TEK set() - currentServer + listeners + isLoading = 1 render
+      // Dinleyiciler HEMEN depoya yazılır: getDoc beklenirken başka sunucuya geçilirse bir sonraki selectServer
+      // bunları kapatabilsin (eskiden await'ten sonra yazıldığı için sızıyor ve eski sunucu geri yazılıyordu).
       set({
-        currentServer: { id: serverDoc.id, ...serverDoc.data() },
-        isLoading: false,
         _channelListener: unsubChannels,
         _roleListener: unsubRoles,
         _memberListener: unsubMembers,
         _badgeListener: unsubBadges
       });
 
+      const serverDoc = await serverDocPromise;
+      if (gen !== serverGen) return; // bu arada başka sunucu seçildi: dinleyicileri o çağrı kapattı
+      if (!serverDoc.exists()) {
+        // Cleanup listeners we just started
+        unsubChannels();
+        unsubRoles();
+        unsubMembers();
+        unsubBadges();
+        set({
+          error: "Server not found", isLoading: false, currentServer: null,
+          _channelListener: null, _roleListener: null, _memberListener: null, _badgeListener: null
+        });
+        return; 
+      }
+
+      // ✅ TEK set() - currentServer + listeners + isLoading = 1 render
+      set({
+        currentServer: { id: serverDoc.id, ...serverDoc.data() },
+        isLoading: false
+      });
+
     } catch (error) {
       console.error("Error selecting server:", error);
-      set({ error: error.message, isLoading: false });
+      if (gen === serverGen) set({ error: error.message, isLoading: false });
     }
   },
 
@@ -596,19 +686,43 @@ export const useServerStore = create((set, get) => ({
       try {
           // 1. Delete Subcollections (Manual cleanup for client-side)
           // Note: Ideally this should be done via a Cloud Function for reliability and cleaner client code.
-          const subcollections = ["channels", "roles", "members", "invites", "bans"];
+          const subcollections = ["channels", "badges", "invites", "bans", "roles", "meta"];
           
-          for (const sub of subcollections) {
-              try {
-                  const q = query(collection(db, "servers", serverId, sub));
-                  const snapshot = await getDocs(q);
-                  // Delete in batches or parallel
-                  const deletePromises = snapshot.docs.map(d => deleteDoc(d.ref));
-                  await Promise.all(deletePromises);
-              } catch (subError) {
-                  console.warn(`Could not delete subcollection ${sub}:`, subError);
+          // Sıra önemli: sahibin kendi üyelik kaydı en son silinir (mesajları silebilmek için üye kalmalı).
+          const base = ["servers", serverId];
+          const warn = (what) => (e) => console.warn(`Could not delete ${what}:`, e?.code || e);
+
+          // Kanalların altındaki mesajlar ve Watch Party oturumu (eskiden artık kalıyordu)
+          try {
+              const channelsSnap = await getDocs(collection(db, ...base, "channels"));
+              for (const ch of channelsSnap.docs) {
+                  await deleteAll(collection(db, ...base, "channels", ch.id, "messages")).catch(warn("messages"));
+                  await deleteDoc(doc(db, ...base, "channels", ch.id, "watchParty", "session")).catch(() => {});
               }
+          } catch (e) { warn("channel contents")(e); }
+
+          // Üst düzey davet kodları (sunucu silinince çalışmaya devam etmesin)
+          try {
+              const invitesSnap = await getDocs(collection(db, ...base, "invites"));
+              await Promise.all(invitesSnap.docs.map((d) => deleteDoc(doc(db, "invites", d.id)).catch(() => {})));
+          } catch (e) { warn("invite codes")(e); }
+
+          for (const sub of subcollections) {
+              await deleteAll(collection(db, ...base, sub)).catch(warn(sub));
           }
+
+          // Üyeler: önce diğerleri, en son kendim
+          try {
+              const myUid = auth.currentUser?.uid;
+              const membersSnap = await getDocs(collection(db, ...base, "members"));
+              const others = membersSnap.docs.filter((d) => d.id !== myUid);
+              for (let i = 0; i < others.length; i += 400) {
+                  const batch = writeBatch(db);
+                  others.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
+                  await batch.commit();
+              }
+              if (myUid) await deleteDoc(doc(db, ...base, "members", myUid)).catch(() => {});
+          } catch (e) { warn("members")(e); }
 
           // 2. Delete Main Doc
           await deleteDoc(doc(db, "servers", serverId));
@@ -656,11 +770,11 @@ export const useServerStore = create((set, get) => ({
 
   createInvite: async (serverId, options = {}) => {
       try {
-          const inviteCode = Math.random().toString(36).substring(2, 10);
+          const inviteCode = randomInviteCode();
           const inviteData = {
               code: inviteCode,
               serverId,
-              creatorId: options.userId,
+              creatorId: options.userId || auth.currentUser?.uid,
               createdAt: serverTimestamp(),
               uses: 0,
               maxUses: options.maxUses || 0, // 0 = infinite
@@ -762,22 +876,24 @@ export const useServerStore = create((set, get) => ({
        const serverDoc = await getDoc(doc(db, "servers", serverId));
        const defaultRoleId = serverDoc.data()?.defaultRoleId;
 
-       await setDoc(memberRef, {
+       // Üyelik + davet sayacı + üye listesi TEK işlemde yazılır: yarıda kalırsa hiçbiri yazılmaz ve güvenlik kuralları
+       // daveti (geçerlilik, limit, yasak, rol) bu işlemin bütününe bakarak doğrular.
+       const batch = writeBatch(db);
+       batch.set(memberRef, {
            id: userId,
+           userId,
            displayName: displayName, // Hesaplanan displayName'i kullan
            photoURL: userData.photoURL || null,
            roles: defaultRoleId ? [defaultRoleId] : [],
+           inviteCode: cleanCode,
            joinedAt: serverTimestamp()
        });
+       batch.update(inviteRef, { uses: increment(1) });
+       batch.update(doc(db, "servers", serverId), { memberIds: arrayUnion(userId) });
+       await batch.commit();
        
-       await updateDoc(inviteRef, { uses: invite.uses + 1 });
-       try { 
-         await updateDoc(doc(db, "servers", serverId, "invites", cleanCode), { uses: invite.uses + 1 }); 
-       } catch(e) {}
-       
-       await updateDoc(doc(db, "servers", serverId), {
-           memberIds: arrayUnion(userId)
-       });
+       // Ayarlar > Davetler listesindeki kopya (yoksa/başarısızsa önemli değil)
+       updateDoc(doc(db, "servers", serverId, "invites", cleanCode), { uses: increment(1) }).catch(() => {});
        
        get().selectServer(serverId);
        return { success: true, serverId };

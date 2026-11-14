@@ -10,10 +10,13 @@ import Input from "@/src/components/ui/Input";
 import { useAuthStore } from "@/src/store/authStore";
 import { useServerStore } from "@/src/store/serverStore";
 import { useServerPermission } from "@/src/hooks/useServerPermission";
+import { useShallow } from "zustand/react/shallow";
 
 export default function MembersTab({ members, roles }) {
-  const { user: currentUser } = useAuthStore();
-  const { currentServer, kickMember, banMember } = useServerStore();
+  const currentUser = useAuthStore((s) => s.user);
+  const { currentServer, kickMember, banMember } = useServerStore(
+    useShallow((s) => ({ currentServer: s.currentServer, kickMember: s.kickMember, banMember: s.banMember })),
+  );
   
   // Modal States
   const [banModal, setBanModal] = useState({ isOpen: false, member: null });

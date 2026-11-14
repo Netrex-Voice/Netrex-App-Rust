@@ -1,10 +1,13 @@
 "use client";
 import { useServerStore } from "@/src/store/serverStore";
 import { useAuthStore } from "@/src/store/authStore";
+import { useShallow } from "zustand/react/shallow";
 
 export function useServerPermission(permissionId) {
-  const { currentServer, members, roles } = useServerStore();
-  const { user } = useAuthStore();
+  const { currentServer, members, roles } = useServerStore(
+    useShallow((s) => ({ currentServer: s.currentServer, members: s.members, roles: s.roles })),
+  );
+  const user = useAuthStore((s) => s.user);
 
   if (!currentServer || !user) return false;
 

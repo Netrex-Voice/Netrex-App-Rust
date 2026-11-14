@@ -1,309 +1,110 @@
 import imageCompression from 'browser-image-compression';
+import { API_URL, apiCall } from '@/src/lib/netrexApi';
 
-export const uploadImageToCloudinary = async (file) => {
-  if (!file) throw new Error("Dosya seçilmedi.");
+// Resim yükleme (Cloudinary).
+//
+// Netrex sunucusu tanımlıysa (NEXT_PUBLIC_NETREX_API_URL) yükleme İMZALIDIR: klasörü sunucu belirler
+// (netrex/u/<uid> ya da netrex/s/<sunucuId>), böylece her resmin sahibi bilinir ve yalnızca sahibi silebilir.
+// Sunucu tanımsızsa (yerel geliştirme) eski imzasız preset yoluna düşülür.
 
-  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-  const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+// Sıkıştırma başarısız olursa orijinal dosya bu boyutu aşıyorsa yüklenmez (eskiden sınırsız yükleniyordu)
+const MAX_UNCOMPRESSED_BYTES = 2 * 1024 * 1024;
 
-  if (!cloudName || !uploadPreset) {
-    console.error("Cloudinary yapılandırması eksik:", { cloudName, uploadPreset });
-    throw new Error("Resim yükleme servisi yapılandırılmamış.");
-  }
-
-  try {
-    // 1. Sıkıştırma (Aggressive Compression)
-    const options = {
-      maxSizeMB: 0.05, // Hedef: ~50KB
-      maxWidthOrHeight: 800,
-      useWebWorker: true,
-      fileType: "image/webp",
-      initialQuality: 0.7
-    };
-    
-    // Sıkıştırma işlemi
-    let compressedFile;
-    try {
-        compressedFile = await imageCompression(file, options);
-    } catch (compError) {
-        console.warn("Compression failed, using original file:", compError);
-        compressedFile = file;
-    }
-    
-    // 2. Upload
-    const formData = new FormData();
-    formData.append("file", compressedFile);
-    formData.append("upload_preset", uploadPreset);
-
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-      method: "POST",
-      body: formData
-    });
-
-    if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error?.message || "Yükleme sunucusu hatası.");
-    }
-
-    const data = await res.json();
-    return data.secure_url;
-  } catch (error) {
-    console.error("Image upload failed:", error);
-    throw error;
-  }
+const PRESETS = {
+  // Mesaj resmi / profil fotoğrafı: ~50KB, 800px
+  image: { maxSizeMB: 0.05, maxWidthOrHeight: 800, initialQuality: 0.7 },
+  // Sunucu simgesi küçük gösterilir (48-96px): ~15KB, 128px
+  serverIcon: { maxSizeMB: 0.015, maxWidthOrHeight: 128, initialQuality: 0.8 },
+  // Rozet (16-32px): ~10KB, 64px
+  badge: { maxSizeMB: 0.01, maxWidthOrHeight: 64, initialQuality: 0.85 },
+  // Profil arka planı bulanık ve soluk gösterilir: ~30KB, 400px
+  profileBackground: { maxSizeMB: 0.03, maxWidthOrHeight: 400, initialQuality: 0.7 },
 };
+
+async function compress(file, preset) {
+  try {
+    return await imageCompression(file, { ...preset, useWebWorker: true, fileType: 'image/webp' });
+  } catch (compError) {
+    console.warn('Compression failed:', compError);
+    if (file.size > MAX_UNCOMPRESSED_BYTES) {
+      throw new Error('Resim işlenemedi ve sıkıştırılmadan yüklemek için çok büyük.');
+    }
+    return file;
+  }
+}
 
 /**
- * 🖼️ Sunucu İkonu için Ultra-Agresif Sıkıştırma ile Yükleme
- * Sunucu ikonları küçük gösterildiğinden (48-96px), çok daha agresif sıkıştırma yapılabilir.
- * Hedef: 128x128 piksel, ~15KB dosya boyutu
+ * @param {File} file
+ * @param {keyof PRESETS} kind
+ * @param {string|null} serverId  sunucuya ait resimler (simge, rozet) için; kullanıcının kendi resimlerinde null
+ * @returns {Promise<string>} resmin https adresi
  */
-export const uploadServerIconToCloudinary = async (file) => {
-  if (!file) throw new Error("Dosya seçilmedi.");
+async function upload(file, kind, serverId = null) {
+  if (!file) throw new Error('Dosya seçilmedi.');
 
-  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-  const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+  const compressed = await compress(file, PRESETS[kind]);
+  const formData = new FormData();
+  formData.append('file', compressed);
 
-  if (!cloudName || !uploadPreset) {
-    console.error("Cloudinary yapılandırması eksik:", { cloudName, uploadPreset });
-    throw new Error("Resim yükleme servisi yapılandırılmamış.");
+  let cloudName;
+  if (API_URL) {
+    const signed = await apiCall('/api/cloudinary-sign', { method: 'POST', body: serverId ? { serverId } : {} });
+    cloudName = signed.cloudName;
+    formData.append('api_key', signed.apiKey);
+    formData.append('timestamp', String(signed.timestamp));
+    formData.append('folder', signed.folder);
+    formData.append('signature', signed.signature);
+  } else {
+    cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+    if (!cloudName || !uploadPreset) throw new Error('Resim yükleme servisi yapılandırılmamış.');
+    formData.append('upload_preset', uploadPreset);
   }
 
-  try {
-    // 1. Ultra-Agresif Sıkıştırma (Sunucu İkonu İçin)
-    const options = {
-      maxSizeMB: 0.015, // Hedef: ~15KB (çok küçük ikon için yeterli)
-      maxWidthOrHeight: 128, // 128x128 piksel (sunucu ikonu için ideal)
-      useWebWorker: true,
-      fileType: "image/webp", // WebP en iyi sıkıştırma oranını sağlar
-      initialQuality: 0.8 // Kaliteyi biraz yüksek tutarak netliği koruyoruz
-    };
-    
-    console.log("🖼️ Sunucu ikonu sıkıştırılıyor...");
-    console.log("   Orijinal boyut:", (file.size / 1024).toFixed(2), "KB");
-    
-    // Sıkıştırma işlemi
-    let compressedFile;
-    try {
-        compressedFile = await imageCompression(file, options);
-        console.log("   Sıkıştırılmış boyut:", (compressedFile.size / 1024).toFixed(2), "KB");
-        console.log("   Sıkıştırma oranı:", ((1 - compressedFile.size / file.size) * 100).toFixed(1) + "%");
-    } catch (compError) {
-        console.warn("Compression failed, using original file:", compError);
-        compressedFile = file;
-    }
-    
-    // 2. Upload
-    const formData = new FormData();
-    formData.append("file", compressedFile);
-    formData.append("upload_preset", uploadPreset);
-    // İkon için özel folder (isteğe bağlı - organize etmek için)
-    formData.append("folder", "server_icons");
-
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-      method: "POST",
-      body: formData
-    });
-
-    if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error?.message || "Yükleme sunucusu hatası.");
-    }
-
-    const data = await res.json();
-    console.log("✅ Sunucu ikonu yüklendi:", data.secure_url);
-    return data.secure_url;
-  } catch (error) {
-    console.error("Server icon upload failed:", error);
-    throw error;
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error?.message || 'Yükleme sunucusu hatası.');
   }
-};
+  return (await res.json()).secure_url;
+}
 
-/**
- * 🏅 Rozet İkonu için Sıkıştırma ile Yükleme
- * Rozetler küçük gösterildiğinden (16-32px), agresif sıkıştırma yapılabilir.
- * Hedef: 64x64 piksel, ~10KB dosya boyutu
- */
-export const uploadBadgeIconToCloudinary = async (file) => {
-  if (!file) throw new Error("Dosya seçilmedi.");
+export const uploadImageToCloudinary = (file) => upload(file, 'image');
+export const uploadProfileBackgroundToCloudinary = (file) => upload(file, 'profileBackground');
+/** `serverId` verilirse resim sunucunun klasörüne gider (yöneticiler silebilir); verilmezse yükleyenin klasörüne. */
+export const uploadServerIconToCloudinary = (file, serverId = null) => upload(file, 'serverIcon', serverId);
+export const uploadBadgeIconToCloudinary = (file, serverId = null) => upload(file, 'badge', serverId);
 
-  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-  const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+/** Cloudinary adresinden public_id çıkarır: .../upload/v123/<public_id>.<uzantı> */
+export function publicIdFromUrl(imageUrl) {
+  if (!imageUrl || !imageUrl.includes('cloudinary.com')) return null;
+  const uploadIndex = imageUrl.indexOf('/upload/');
+  if (uploadIndex === -1) return null;
+  const parts = imageUrl.substring(uploadIndex + 8).split('?')[0].split('/');
+  if (parts.length > 1 && /^v\d+$/.test(parts[0])) parts.shift();
+  const pathWithExt = parts.join('/');
+  const lastDot = pathWithExt.lastIndexOf('.');
+  return (lastDot !== -1 ? pathWithExt.substring(0, lastDot) : pathWithExt) || null;
+}
 
-  if (!cloudName || !uploadPreset) {
-    console.error("Cloudinary yapılandırması eksik:", { cloudName, uploadPreset });
-    throw new Error("Resim yükleme servisi yapılandırılmamış.");
-  }
-
-  try {
-    // Rozet için kompakt sıkıştırma
-    const options = {
-      maxSizeMB: 0.01, // Hedef: ~10KB
-      maxWidthOrHeight: 64, // 64x64 piksel (rozet için ideal)
-      useWebWorker: true,
-      fileType: "image/webp",
-      initialQuality: 0.85
-    };
-    
-    console.log("🏅 Rozet ikonu sıkıştırılıyor...");
-    console.log("   Orijinal boyut:", (file.size / 1024).toFixed(2), "KB");
-    
-    let compressedFile;
-    try {
-        compressedFile = await imageCompression(file, options);
-        console.log("   Sıkıştırılmış boyut:", (compressedFile.size / 1024).toFixed(2), "KB");
-    } catch (compError) {
-        console.warn("Compression failed, using original file:", compError);
-        compressedFile = file;
-    }
-    
-    const formData = new FormData();
-    formData.append("file", compressedFile);
-    formData.append("upload_preset", uploadPreset);
-    formData.append("folder", "badges");
-
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-      method: "POST",
-      body: formData
-    });
-
-    if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error?.message || "Yükleme sunucusu hatası.");
-    }
-
-    const data = await res.json();
-    console.log("✅ Rozet ikonu yüklendi:", data.secure_url);
-    return data.secure_url;
-  } catch (error) {
-    console.error("Badge icon upload failed:", error);
-    throw error;
-  }
-};
-
-/**
- * 🖼️ Profil Arkaplan Resmi için Sıkıştırma ile Yükleme
- * Arkaplan resmi blur ve düşük opacity ile gösterileceğinden orta kalite yeterli.
- * Hedef: 400x400 piksel, ~30KB dosya boyutu
- */
-export const uploadProfileBackgroundToCloudinary = async (file) => {
-  if (!file) throw new Error("Dosya seçilmedi.");
-
-  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-  const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-
-  if (!cloudName || !uploadPreset) {
-    console.error("Cloudinary yapılandırması eksik:", { cloudName, uploadPreset });
-    throw new Error("Resim yükleme servisi yapılandırılmamış.");
-  }
-
-  try {
-    // Profil arkaplanı için orta agresif sıkıştırma
-    const options = {
-      maxSizeMB: 0.03, // Hedef: ~30KB
-      maxWidthOrHeight: 400, // 400x400 piksel (blur için yeterli)
-      useWebWorker: true,
-      fileType: "image/webp",
-      initialQuality: 0.7
-    };
-    
-    console.log("🖼️ Profil arkaplan resmi sıkıştırılıyor...");
-    console.log("   Orijinal boyut:", (file.size / 1024).toFixed(2), "KB");
-    
-    let compressedFile;
-    try {
-        compressedFile = await imageCompression(file, options);
-        console.log("   Sıkıştırılmış boyut:", (compressedFile.size / 1024).toFixed(2), "KB");
-    } catch (compError) {
-        console.warn("Compression failed, using original file:", compError);
-        compressedFile = file;
-    }
-    
-    const formData = new FormData();
-    formData.append("file", compressedFile);
-    formData.append("upload_preset", uploadPreset);
-    formData.append("folder", "profile_backgrounds");
-
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-      method: "POST",
-      body: formData
-    });
-
-    if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error?.message || "Yükleme sunucusu hatası.");
-    }
-
-    const data = await res.json();
-    console.log("✅ Profil arkaplan resmi yüklendi:", data.secure_url);
-    return data.secure_url;
-  } catch (error) {
-    console.error("Profile background upload failed:", error);
-    throw error;
-  }
-};
-
+/** Resmi Cloudinary'den siler. Başarısızlık (ör. sahibi değilim, eski sahipsiz resim) sessizce günlüğe yazılır. */
 export const deleteImageFromCloudinary = async (imageUrl) => {
-    if (!imageUrl || !imageUrl.includes('cloudinary.com')) return;
-
-    try {
-        // Extract Public ID
-        // URL format: https://res.cloudinary.com/<cloud_name>/image/upload/v<version>/<public_id>.<extension>
-        
-        const uploadIndex = imageUrl.indexOf('/upload/');
-        if (uploadIndex === -1) return;
-        
-        const afterUpload = imageUrl.substring(uploadIndex + 8);
-        const parts = afterUpload.split('/');
-        
-        // Versiyonu daha güvenli kontrol et (v12345678 gibi sadece rakam içeren versiyonlar)
-        if (parts.length > 1 && /^v\d+$/.test(parts[0])) {
-            parts.shift();
-        }
-        
-        const pathWithExt = parts.join('/');
-        const lastDotIndex = pathWithExt.lastIndexOf('.');
-        const public_id = lastDotIndex !== -1 ? pathWithExt.substring(0, lastDotIndex) : pathWithExt;
-
-        console.log("🗑️ Cloudinary'den resim siliniyor. Public ID:", public_id);
-
-        let result;
-        if (typeof window !== 'undefined' && window.netrex?.deleteCloudinaryImage) {
-            // Masaüstü (Tauri): istek Rust'ta imzalanıp doğrudan Cloudinary'ye gider (/api route'u yok)
-            result = await window.netrex.deleteCloudinaryImage(public_id);
-        } else {
-            // Web: API ayrı Vercel projesinde (NEXT_PUBLIC_NETREX_API_URL) ve Firebase kimliğiyle çağrılır
-            const apiBase = (process.env.NEXT_PUBLIC_NETREX_API_URL || '').replace(/\/+$/, '');
-            const baseUrl = apiBase || (typeof window !== 'undefined' ? window.location.origin : '');
-            const authHeaders = {};
-            if (apiBase) {
-                const { auth } = await import('@/src/lib/firebase');
-                const idToken = await auth.currentUser?.getIdToken();
-                if (idToken) authHeaders.Authorization = `Bearer ${idToken}`;
-            }
-            const response = await fetch(`${baseUrl}/api/cloudinary-delete`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...authHeaders },
-                body: JSON.stringify({ public_id })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error("❌ Cloudinary silme hatası (API):", errorData);
-                // toast.error("Resim sunucudan tamamen silinemedi. (API Hatası)");
-                throw new Error(errorData.error || "Sunucu silme işlemini reddetti");
-            }
-
-            result = await response.json();
-        }
-        if (result.result?.result !== 'ok') {
-             console.warn("⚠️ Cloudinary uyarısı:", result.result);
-             // toast.warning("Resim chatten silindi ancak sunucuda bulunamadı.");
-        } else {
-             console.log("✅ Cloudinary silme başarılı:", result);
-        }
-    } catch (e) {
-        console.error("❌ Cloudinary'den resim silinemedi:", e.message);
-        // toast.error("Resim sunucudan silinemedi: " + e.message);
+  const publicId = publicIdFromUrl(imageUrl);
+  if (!publicId) return;
+  try {
+    let result;
+    if (typeof window !== 'undefined' && window.netrex?.deleteCloudinaryImage) {
+      result = await window.netrex.deleteCloudinaryImage(publicId);
+    } else if (API_URL) {
+      result = await apiCall('/api/cloudinary-delete', { method: 'POST', body: { public_id: publicId } });
+    } else {
+      return; // sunucu yok: silinemez
     }
+    if (result?.result?.result !== 'ok') console.warn('Cloudinary uyarısı:', result?.result);
+  } catch (e) {
+    console.warn("Cloudinary'den resim silinemedi:", e?.message || e);
+  }
 };

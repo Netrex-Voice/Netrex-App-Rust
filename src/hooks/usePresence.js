@@ -4,7 +4,6 @@ import { useEffect, useRef, useCallback, useMemo } from 'react';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/src/lib/firebase';
 import { useAuthStore } from '@/src/store/authStore';
-import { useServerStore } from '@/src/store/serverStore';
 import { useSettingsStore } from '@/src/store/settingsStore';
 import { registerCleanupTask } from '@/src/utils/cleanup';
 import { getRtdbPresence, startMyConnectionPresence, markMyConnectionOffline } from '@/src/lib/rtdbPresence';
@@ -13,20 +12,21 @@ import { getRtdbPresence, startMyConnectionPresence, markMyConnectionOffline } f
 // ✅ OPTIMIZATION #2: Increased from 2s to 3s for better batching
 const PRESENCE_BATCH_DELAY = 3000;
 
-// Heartbeat intervals (dynamic based on voice chat state)
-// ✅ OPTIMIZATION #9: Different intervals for voice chat
-const HEARTBEAT_INTERVAL_VOICE = 2 * 60 * 1000; // 2 minutes in voice
-const HEARTBEAT_INTERVAL_IDLE = 5 * 60 * 1000;  // 5 minutes otherwise
+// Heartbeat (Firestore `lastSeen`) artık yalnızca YEDEK: "şu an bağlı mı?" bilgisi Realtime Database'den gelir
+// (rtdbPresence.js, onDisconnect ile anlık). Eskiden 2-5 dakikada bir yazılıyordu; her yazma, o kullanıcının belgesini
+// dinleyen herkes için bir Firestore OKUMASI demekti (üye listesi × çevrimiçi kişi sayısı) ve kotayı en çok bu tüketiyordu.
+const HEARTBEAT_INTERVAL_VOICE = 30 * 60 * 1000;
+const HEARTBEAT_INTERVAL_IDLE = 30 * 60 * 1000;
 
 // How long before a user is considered "stale" (offline)
 // Boştaki kullanıcının heartbeat aralığından (5 dk) UZUN olmalı. Eskiden eşik de 5 dk'ydı:
 // boştaki biri bir sonraki sinyalinden hemen önce kısa süre "çevrimdışı" görünüp geri dönüyordu.
 // 8 dk = bir heartbeat + bir kaçırılan sinyal toleransı.
-export const PRESENCE_STALE_THRESHOLD = 8 * 60 * 1000; // 8 minutes
+// Yalnızca RTDB bilgisi olmayan yerlerde kullanılır: bir heartbeat (30 dk) + pay.
+export const PRESENCE_STALE_THRESHOLD = 45 * 60 * 1000;
 
 export function usePresence() {
-  const { user } = useAuthStore();
-  const { currentServer } = useServerStore();
+  const user = useAuthStore((s) => s.user);
   const userStatus = useSettingsStore(state => state.userStatus);
   const isInVoiceRoom = useSettingsStore(state => state.isInVoiceRoom);
   const quickStatus = useSettingsStore(state => state.quickStatus);
@@ -34,7 +34,6 @@ export function usePresence() {
   // ✅ OPTIMIZATION #1: Ref-based state (eliminate dependency hell)
   const userRef = useRef(user);
   const userStatusRef = useRef(userStatus);
-  const currentServerRef = useRef(currentServer);
   const isInVoiceRoomRef = useRef(isInVoiceRoom);
   const quickStatusRef = useRef(quickStatus);
   
@@ -50,10 +49,9 @@ export function usePresence() {
   useEffect(() => {
     userRef.current = user;
     userStatusRef.current = userStatus;
-    currentServerRef.current = currentServer;
     isInVoiceRoomRef.current = isInVoiceRoom;
     quickStatusRef.current = quickStatus;
-  }, [user, userStatus, currentServer, isInVoiceRoom, quickStatus]);
+  }, [user, userStatus, isInVoiceRoom, quickStatus]);
 
   // ✅ OPTIMIZATION #2: Batch-optimized presence update
   const updatePresence = useCallback(async (status) => {

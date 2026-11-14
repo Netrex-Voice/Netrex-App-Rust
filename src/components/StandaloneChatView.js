@@ -10,10 +10,13 @@ import { useChatStore } from "@/src/store/chatStore";
 import { useServerStore } from "@/src/store/serverStore";
 import { useMemo } from "react";
 import { Hash, MessageSquare, ChevronLeft, Users } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 
 export default function StandaloneChatView({ channelId, username, userId, onBack }) {
-  const { currentChannel } = useChatStore();
-  const { channels, currentServer, setMobileMemberDrawerOpen } = useServerStore();
+  const currentChannel = useChatStore((s) => s.currentChannel);
+  const { channels, currentServer, setMobileMemberDrawerOpen } = useServerStore(
+    useShallow((s) => ({ channels: s.channels, currentServer: s.currentServer, setMobileMemberDrawerOpen: s.setMobileMemberDrawerOpen })),
+  );
   
   const channelName = useMemo(() => {
     if (currentChannel?.name) return currentChannel.name;

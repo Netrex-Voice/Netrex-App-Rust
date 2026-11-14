@@ -2399,7 +2399,7 @@ dependencies = [
 
 [[package]]
 name = "netrex"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "base64 0.22.1",
  "chacha20poly1305",
@@ -2422,6 +2422,7 @@ dependencies = [
  "url",
  "wasapi",
  "webview2-com",
+ "windows",
  "windows-capture",
  "windows-core",
  "windows-sys 0.61.2",

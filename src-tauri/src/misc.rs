@@ -1,17 +1,11 @@
-//! Küçük IPC komutları (Faz 2): yollar, dış bağlantı, admin/uid, devtools.
-//! Electron karşılıkları: `ipcHandlers.js` içindeki get-app-path, get-resources-path,
-//! open-external-link, is-admin, set-current-user-uid, open-devtools.
+//! Küçük IPC komutları: kaynak yolu, dış bağlantı, (geliştirmede) devtools.
 
 use serde::Serialize;
-use std::sync::Mutex;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager};
 use tauri_plugin_opener::OpenerExt;
 
 /// Derleme zamanında `build.rs` tarafından gömülür (boş olabilir).
 const ADMIN_UID: &str = env!("NETREX_ADMIN_UID");
-
-#[derive(Default)]
-pub struct CurrentUser(Mutex<Option<String>>);
 
 fn is_admin_uid(uid: &str) -> bool {
     !ADMIN_UID.is_empty() && uid == ADMIN_UID
@@ -31,19 +25,6 @@ impl OpResult {
     pub(crate) fn err(msg: &str) -> Self {
         Self { success: false, error: Some(msg.to_string()) }
     }
-}
-
-#[tauri::command]
-pub fn is_admin(uid: Option<String>) -> bool {
-    uid.as_deref().map(is_admin_uid).unwrap_or(false)
-}
-
-#[tauri::command]
-pub fn set_current_user_uid(state: State<'_, CurrentUser>, uid: Option<String>) -> OpResult {
-    if let Ok(mut slot) = state.0.lock() {
-        *slot = uid;
-    }
-    OpResult::ok()
 }
 
 /// Admin kimliği doğrulandıysa WebView geliştirici araçlarını açar.
@@ -73,15 +54,6 @@ pub fn open_devtools(app: AppHandle, uid: Option<String>) -> OpResult {
     }
 }
 
-/// Electron'daki `app.getAppPath()` karşılığı: uygulamanın kaynak klasörü.
-#[tauri::command]
-pub fn get_app_path(app: AppHandle) -> String {
-    app.path()
-        .resource_dir()
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_default()
-}
-
 /// Electron'da worklet dosyalarını `file:///` ile yüklemek için kaynak klasörü döndürüyordu.
 /// Tauri'de statik dosyalar aynı origin'den (`/rnnoise-suppressor.worklet.js`) sunulur; boş
 /// dönmek `getResourcePath()`'in göreli `/dosya` yoluna düşmesini sağlar. (macOS/Linux'ta
@@ -108,7 +80,6 @@ mod tests {
 
     #[test]
     fn empty_uid_is_never_admin() {
-        assert!(!is_admin(None));
-        assert!(!is_admin(Some(String::new())));
+        assert!(!is_admin_uid(""));
     }
 }

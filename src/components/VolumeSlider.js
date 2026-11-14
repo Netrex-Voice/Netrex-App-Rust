@@ -1,6 +1,7 @@
 import { memo, useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { Volume2, Volume1, VolumeX } from "lucide-react";
 import { useParticipantVolumeStore } from "@/src/store/participantVolumeStore";
+import { useShallow } from "zustand/react/shallow";
 
 /**
  * ✅ OPTIMIZED VolumeSlider - LiveKit Integration
@@ -10,7 +11,9 @@ import { useParticipantVolumeStore } from "@/src/store/participantVolumeStore";
  * - LiveKit native volume range: 0.0-1.0 (UI: 0-200%)
  */
 const VolumeSlider = memo(({ participantIdentity }) => {
-  const { volumes, setVolume: setStoreVolume } = useParticipantVolumeStore();
+  const { volumes, setStoreVolume } = useParticipantVolumeStore(
+    useShallow((s) => ({ volumes: s.volumes, setStoreVolume: s.setVolume })),
+  );
   
   // LiveKit uses 0.0-1.0 range, but UI shows 0-200%
   // currentVol is in LiveKit range (0.0-1.0), we convert to % for UI

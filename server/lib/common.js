@@ -67,7 +67,8 @@ export async function requireUser(req, res) {
       clockTolerance: 10,
     });
     if (typeof payload.sub !== "string" || !payload.sub) throw new Error("sub yok");
-    return { uid: payload.sub, name: typeof payload.name === "string" ? payload.name : "" };
+    // idToken: Firestore'u kullanıcının kendi yetkisiyle okumak için (bkz. lib/firestore.js)
+    return { uid: payload.sub, name: typeof payload.name === "string" ? payload.name : "", idToken: m[1] };
   } catch (e) {
     console.warn("token reddedildi:", e && e.code ? e.code : e && e.message);
     res.status(401).json({ error: "invalid token" });
@@ -112,4 +113,45 @@ export function validPublicId(id) {
     /^[A-Za-z0-9_\-./]+$/.test(id) &&
     !id.startsWith("/")
   );
+}
+
+/** Eski (güncellenmemiş) istemcilere geçiş süresince izin ver: Vercel'de ALLOW_LEGACY_CLIENTS=1. Varsayılan: kapalı. */
+export function legacyClientsAllowed() {
+  return process.env.ALLOW_LEGACY_CLIENTS === "1";
+}
+
+// ── Hız sınırı (en iyi çaba) ──────────────────────────────────────────────
+// Sunucusuz işlevlerde bellek, örnek (instance) başınadır ve örnekler arasında paylaşılmaz; bu yüzden kesin bir
+// sınır değildir, ama tek bir istemcinin aynı örneği dakikada yüzlerce istekle dövmesini engeller.
+const buckets = new Map(); // "kapsam:uid" -> { count, resetAt }
+
+/** Sınır aşıldıysa 429 yazar ve `false` döner. */
+export function rateLimit(res, scope, uid, max, windowMs = 60_000) {
+  const now = Date.now();
+  if (buckets.size > 5000) {
+    for (const [k, b] of buckets) if (b.resetAt <= now) buckets.delete(k);
+  }
+  const key = `${scope}:${uid}`;
+  let b = buckets.get(key);
+  if (!b || b.resetAt <= now) {
+    b = { count: 0, resetAt: now + windowMs };
+    buckets.set(key, b);
+  }
+  b.count += 1;
+  if (b.count > max) {
+    res.setHeader("Retry-After", String(Math.ceil((b.resetAt - now) / 1000)));
+    res.status(429).json({ error: "too many requests" });
+    return false;
+  }
+  return true;
+}
+
+/** Yalnızca testler için. */
+export function __resetRateLimitsForTest() {
+  buckets.clear();
+}
+
+/** Firebase kullanıcı kimliği (yol/klasör adında güvenle kullanılabilir mi?). */
+export function validUid(uid) {
+  return typeof uid === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(uid);
 }

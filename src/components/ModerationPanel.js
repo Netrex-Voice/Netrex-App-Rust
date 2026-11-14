@@ -2,8 +2,8 @@ import { memo, useCallback, useMemo, useState, useEffect } from "react";
 import { MicOff, Headphones, ShieldAlert, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { doc, updateDoc, serverTimestamp, arrayRemove, getDoc } from "firebase/firestore";
-import { ref, remove } from "firebase/database";
-import { db, rtdb } from "@/src/lib/firebase";
+
+import { db } from "@/src/lib/firebase";
 
 /**
  * ✅ OPTIMIZED ModerationPanel
@@ -159,11 +159,8 @@ const ModerationPanel = memo(({
           gameActivity: null
         });
 
-        // B. Oda varlığı (room_presence) listesinden çıkar
-        if (roomName) {
-          const presenceRef = ref(rtdb, `room_presence/${roomName}/${targetUid}`);
-          await remove(presenceRef);
-        }
+        // Oda varlığı (room_presence) kaydını atılan kişinin kendi istemcisi siler (kopunca onDisconnect de siler);
+        // güvenlik kuralları başkasının kaydını silmeye izin vermez.
 
         toast.success(`${participant.name || participant.identity} sesli kanaldan atıldı`);
       }

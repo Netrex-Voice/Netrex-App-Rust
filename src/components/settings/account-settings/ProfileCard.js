@@ -9,7 +9,7 @@ import {
   uploadImageToCloudinary,
   deleteImageFromCloudinary,
 } from "@/src/utils/imageUpload";
-import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, limit } from "firebase/firestore";
 import { db, auth } from "@/src/lib/firebase";
 import { updateProfile } from "firebase/auth";
 import { useServerStore } from "@/src/store/serverStore";
@@ -40,9 +40,7 @@ const containsProfanity = (text) => {
  * Avatar tıklandığında dosya seçilir → ImageCropModal açılır →
  * Onaylanınca Cloudinary'ye yüklenir.
  */
-const ProfileCard = memo(function ProfileCard({ user, profileColor, bgImage }) {
-  if (!user) return null;
-
+const ProfileCardInner = memo(function ProfileCardInner({ user, profileColor, bgImage }) {
   const fileInputRef = useRef(null);
   const [bannerColor, setBannerColor] = useState(profileColor);
   const [cropFile, setCropFile] = useState(null);
@@ -207,7 +205,8 @@ const ProfileCard = memo(function ProfileCard({ user, profileColor, bgImage }) {
         // Uniqueness check
         const q = query(
           collection(db, "users"),
-          where("username", "==", value.toLowerCase())
+          where("username", "==", value.toLowerCase()),
+          limit(1)
         );
         const snapshot = await getDocs(q);
         if (!snapshot.empty) {
@@ -473,4 +472,8 @@ const ProfileCard = memo(function ProfileCard({ user, profileColor, bgImage }) {
   );
 });
 
-export default ProfileCard;
+// Kullanıcı yokken (çıkış anı) hook sırası bozulmasın diye kontrol sarmalayıcıda yapılır
+export default function ProfileCard(props) {
+  if (!props.user) return null;
+  return <ProfileCardInner {...props} />;
+}

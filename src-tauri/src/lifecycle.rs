@@ -65,13 +65,24 @@ fn schedule_window_state_save(app: &AppHandle) {
         .save_generation
         .fetch_add(1, SeqCst)
         + 1;
+    // Sürükleme sırasında saniyede onlarca olay gelir: olay başına iş parçacığı açmak yerine TEK bekçi çalışır ve
+    // olaylar durulana kadar bekler.
+    if app.state::<LifecycleState>().save_pending.swap(true, SeqCst) {
+        return; // bekçi zaten çalışıyor, sayacı gördüğünde beklemeyi uzatır
+    }
     let app = app.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(STATE_SAVE_DEBOUNCE);
-        // Bu arada yeni bir taşıma/boyutlandırma olduysa o kendi kaydını yapacak.
-        if app.state::<LifecycleState>().save_generation.load(SeqCst) == gen {
-            save_window_state_now(&app);
+        let mut seen = gen;
+        loop {
+            std::thread::sleep(STATE_SAVE_DEBOUNCE);
+            let now = app.state::<LifecycleState>().save_generation.load(SeqCst);
+            if now == seen {
+                break;
+            }
+            seen = now;
         }
+        app.state::<LifecycleState>().save_pending.store(false, SeqCst);
+        save_window_state_now(&app);
     });
 }
 
@@ -94,6 +105,8 @@ pub struct LifecycleState {
     was_minimized: AtomicBool,
     /// Pencere durumu kaydı için debounce sayacı.
     save_generation: std::sync::atomic::AtomicU64,
+    /// Debounce bekçisi çalışıyor mu (olay başına iş parçacığı açmamak için).
+    save_pending: AtomicBool,
     /// Renderer'ın `cleanup-complete` sinyalini bekleyen kanal.
     cleanup_tx: Mutex<Option<mpsc::Sender<()>>>,
 }

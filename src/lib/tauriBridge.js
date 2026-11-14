@@ -21,6 +21,7 @@
 
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, once } from "@tauri-apps/api/event";
+import { API_URL, apiCall } from "@/src/lib/netrexApi";
 
 /**
  * Gerçek olay dinleyicisi (Electron `createEventHandler` karşılığı):
@@ -259,7 +260,7 @@ function releaseTransceiversOf(track) {
   }, 300);
 }
 
-async function captureSource(sourceId, { width = 1920, height = 1080, fps = 30, audio = false } = {}) {
+async function captureSource(sourceId, { width = 1920, height = 1080, fps = 30, audio = false, cursor = true } = {}) {
   const wv = window.chrome && window.chrome.webview;
   if (!wv || !wv.addEventListener) throw new Error("Bu WebView ekran yakalamayı desteklemiyor");
 
@@ -310,7 +311,7 @@ async function captureSource(sourceId, { width = 1920, height = 1080, fps = 30, 
 
   let info;
   try {
-    info = await invoke("start_capture", { sourceId, fps, audio: audioTrack ? audio : null, onAudio: audioChannel });
+    info = await invoke("start_capture", { sourceId, fps, audio: audioTrack ? audio : null, cursor: cursor !== false, onAudio: audioChannel });
   } catch (e) {
     clearTimeout(bufferTimer);
     if (audioCtx) audioCtx.close().catch(() => {});
@@ -369,6 +370,10 @@ async function captureSource(sourceId, { width = 1920, height = 1080, fps = 30, 
   if (audioTrack) stream.addTrack(audioTrack);
   let lastCounter = 0;
   let lastDraw = 0;
+  let texW = 0;
+  let texH = 0;
+  // Yoklama aralığı: kare süresinin yarısı (30 fps → ~16 ms). Eskiden sabit 4 ms'ydi (saniyede 250 uyanma).
+  const pollMs = Math.max(4, Math.floor(1000 / Math.max(1, fps) / 2));
   let stopped = false;
   let timer = null;
 
@@ -385,8 +390,16 @@ async function captureSource(sourceId, { width = 1920, height = 1080, fps = 30, 
     }
     gl.viewport(0, 0, cw, ch);
     if (changed) {
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, sw, sh, 0, gl.RGBA, gl.UNSIGNED_BYTE,
-        new Uint8Array(arrayBuffer, 16, sw * sh * 4));
+      const pixels = new Uint8Array(arrayBuffer, 16, sw * sh * 4);
+      if (sw !== texW || sh !== texH) {
+        // Boyut değişti: dokuyu yeniden ayır
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, sw, sh, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        texW = sw;
+        texH = sh;
+      } else {
+        // Aynı boyut: mevcut dokunun içeriğini güncelle (her karede yeniden ayırma yok)
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, sw, sh, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      }
       lastCounter = counter;
     }
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -399,7 +412,7 @@ async function captureSource(sourceId, { width = 1920, height = 1080, fps = 30, 
     if (stopped) return;
     // Yeni kare geldiyse çiz; içerik durağansa (pencere değişmiyor) saniyede bir tazele
     if (header[0] !== lastCounter || performance.now() - lastDraw > 1000) draw();
-    timer = setTimeout(tick, 4);
+    timer = setTimeout(tick, pollMs);
   };
 
   const cleanup = () => {
@@ -473,35 +486,7 @@ function notifyNewPointerRequests(payload) {
   } catch (_) { /* bildirim yalnızca bir kolaylık */ }
 }
 
-/**
- * Sunucu (Vercel, `server/` klasörü): LiveKit token ve Cloudinary silme. Secret'lar yalnızca orada durur.
- * Adres derleme zamanında `NEXT_PUBLIC_NETREX_API_URL` ile verilir. TANIMSIZSA uygulama eski yerel yola
- * (Rust, gömülü anahtarlar) düşer: sunucu hazır olana kadar hiçbir şey kırılmaz.
- */
-const API_URL = (process.env.NEXT_PUBLIC_NETREX_API_URL || "").replace(/\/+$/, "");
-
-/** Firebase girişinin güncel ID token'ı (süresi dolmuşsa SDK kendiliğinden yeniler). */
-async function firebaseIdToken() {
-  const { auth } = await import("@/src/lib/firebase");
-  const user = auth.currentUser;
-  if (!user) throw new Error("Giriş yapılmamış");
-  return user.getIdToken();
-}
-
-/** Sunucuya kimlikli istek; hata gövdesindeki mesajı fırlatır. */
-async function apiCall(path, { method = "GET", body } = {}) {
-  const res = await fetch(`${API_URL}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${await firebaseIdToken()}`,
-      ...(body ? { "Content-Type": "application/json" } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Sunucu hatası (${res.status})`);
-  return data;
-}
+// Sunucu (Vercel) çağrıları: src/lib/netrexApi.js. API_URL tanımsızsa uygulama eski yerel yola (Rust) düşer.
 
 let inputListenerRefs = 0;
 
@@ -530,8 +515,8 @@ function buildBridge() {
 
     // --- LIVEKIT ---
     getLiveKitToken: API_URL
-      ? async (room, identity, displayName, serverIndex = 0) =>
-          (await apiCall("/api/livekit-token", { method: "POST", body: { room, identity, displayName, serverIndex } })).token
+      ? async (room, identity, displayName, serverIndex = 0, serverId = null) =>
+          (await apiCall("/api/livekit-token", { method: "POST", body: { room, identity, displayName, serverIndex, serverId } })).token
       : (room, identity, displayName, serverIndex = 0) =>
           invoke("get_livekit_token", { room, identity, displayName, serverIndex }),
     getLiveKitServerInfo: API_URL
@@ -566,14 +551,11 @@ function buildBridge() {
     },
 
     // --- PATHS ---
-    getAppPath: () => invoke("get_app_path"),
     // Bilerek boş: worklet'ler aynı origin'den `/dosya` olarak yüklenir (bkz. src-tauri/src/misc.rs)
     getResourcesPath: () => invoke("get_resources_path"),
 
     // --- DEVTOOLS / ADMIN ---
     openDevTools: (uid) => invoke("open_devtools", { uid }),
-    isAdmin: (uid) => invoke("is_admin", { uid }),
-    setCurrentUserUid: (uid) => invoke("set_current_user_uid", { uid }),
 
     // --- WINDOW ---
     focusWindow: () => invoke("focus_window"),

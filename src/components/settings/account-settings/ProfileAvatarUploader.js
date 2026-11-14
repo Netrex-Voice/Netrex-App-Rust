@@ -15,8 +15,8 @@ import { useSettingsStore } from "@/src/store/settingsStore";
 import { extractDominantGradient } from "@/src/utils/extractDominantGradient";
 
 export default function ProfileAvatarUploader() {
-  const { user } = useAuthStore();
-  const { servers } = useServerStore();
+  const user = useAuthStore((s) => s.user);
+  const servers = useServerStore((s) => s.servers);
   const setProfileColor = useSettingsStore((s) => s.setProfileColor);
   const autoThemeFromImage = useSettingsStore((s) => s.autoThemeFromImage);
 

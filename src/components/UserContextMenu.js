@@ -13,6 +13,7 @@ import { useVoiceGroupStore, VOICE_GROUPS, DEFAULT_GROUP_ID } from "@/src/store/
 import { moveToGroup, splitWith } from "@/src/hooks/useVoiceGroups";
 import { WhisperHold } from "@/src/components/active-room/VoiceGroupsUI";
 import { Split } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 
 /** Sağ tık menüsünde: tek tıkla ayrı konuş + gruba taşı + basılı tut fısılda */
 function VoiceGroupQuickActions({ participant, onDone }) {
@@ -89,9 +90,11 @@ export default function UserContextMenu({
   const menuRef = useRef(null);
   const room = useRoomContext();
   const { localParticipant } = useLocalParticipant();
-  const { currentServer } = useServerStore();
-  const { user } = useAuthStore();
-  const { friends, incomingRequests, outgoingRequests, sendFriendRequest } = useFriendStore();
+  const currentServer = useServerStore((s) => s.currentServer);
+  const user = useAuthStore((s) => s.user);
+  const { friends, incomingRequests, outgoingRequests, sendFriendRequest } = useFriendStore(
+    useShallow((s) => ({ friends: s.friends, incomingRequests: s.incomingRequests, outgoingRequests: s.outgoingRequests, sendFriendRequest: s.sendFriendRequest })),
+  );
 
   const canMute = useServerPermission("MUTE_MEMBERS");
   const canDeafen = useServerPermission("DEAFEN_MEMBERS");

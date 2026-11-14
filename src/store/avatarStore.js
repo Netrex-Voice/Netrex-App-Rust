@@ -1,30 +1,32 @@
 import { create } from "zustand";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/src/lib/firebase";
 
-// Profil fotoğrafı için TEK canlı kaynak: Firestore `users/{uid}.photoURL`.
+// Profil fotoğrafı için tek kaynak: Firestore `users/{uid}.photoURL`.
 //
-// Sorun: fotoğraf adresi birçok yerde kopyalanıyor (sunucu üye kaydı, LiveKit metadata'sı, oda varlık kaydı,
-// mesajlar, DM/arkadaş önbelleği) ve kullanıcı fotoğrafını değiştirince ya da silince bu kopyalar eskiyor.
-// Silinen bir resme işaret eden kopya yüklenemeyince harf/gradyan yedeği görünüyordu; üstelik kimi ekran
-// fotoğrafı gösteriyor, kimi göstermiyordu.
+// Fotoğraf adresi birçok yerde kopyalanıyor (sunucu üye kaydı, LiveKit metadata'sı, oda varlık kaydı, mesajlar) ve
+// kullanıcı fotoğrafını değiştirince bu kopyalar eskiyor. Tüm avatarlar güncel adresi buradan okur
+// (bkz. useAvatarUrl / UserPhoto / Avatar); kopyalar yalnızca ilk anda yedek olarak kullanılır.
 //
-// Çözüm: ekrandaki her kullanıcı için `users/{uid}` belgesini (ref-sayaçlı) dinleyip güncel adresi burada
-// tutuyoruz; tüm avatarlar bunu okuyor (bkz. useAvatarUrl / UserPhoto / Avatar). Kopyalar yalnızca ilk anda
-// (belge gelene kadar) yedek olarak kullanılır.
+// Maliyet: eskiden ekrandaki HER kullanıcı için `users/{uid}` belgesine canlı dinleyici açılıyordu; o belge durum/
+// son görülme/oyun etkinliği için sık yazıldığından her yazma, fotoğraf değişmese de bir okuma demekti. Artık belge
+// kullanıcı başına BİR KEZ okunur ve önbelleğe alınır; uzun süre sonra yeniden istenirse tazelenir. Zaten canlı
+// dinlenen yerler (üye listesi, arkadaşlar, DM) gördükleri adresi `primeAvatars` ile buraya ücretsiz aktarır.
 
 export const useAvatarStore = create(() => ({
   photos: {}, // uid -> string | null (belge okunduysa)
 }));
 
-const watchers = new Map(); // uid -> { count, unsub, teardownTimer }
+const REFRESH_AFTER_MS = 15 * 60 * 1000;
+const fetchedAt = new Map(); // uid -> son okuma/aktarma zamanı
+const inFlight = new Set();
 let pending = null;
 let flushScheduled = false;
 
 const schedule = (fn) =>
   typeof requestAnimationFrame === "function" ? requestAnimationFrame(fn) : setTimeout(fn, 16);
 
-// Açılışta onlarca belge art arda gelir: kare başına tek set()
+// Açılışta onlarca adres art arda gelir: kare başına tek set()
 function queuePhoto(uid, url) {
   pending = { ...(pending || {}), [uid]: url };
   if (flushScheduled) return;
@@ -45,58 +47,45 @@ function queuePhoto(uid, url) {
   });
 }
 
-const TEARDOWN_DELAY_MS = 30_000; // liste kaydırılırken/yeniden bağlanırken dinleyici sürekli kapanıp açılmasın
-
-/** uid'yi izlemeye başlar (sayaçlı). Bırakma fonksiyonu döner. */
-export function watchAvatar(uid) {
-  if (!uid) return () => {};
-
-  let w = watchers.get(uid);
-  if (w) {
-    clearTimeout(w.teardownTimer);
-    w.teardownTimer = null;
-    w.count += 1;
-  } else {
-    const unsub = onSnapshot(
-      doc(db, "users", uid),
-      (snap) => {
-        const url = snap.exists() ? snap.data().photoURL || null : null;
-        queuePhoto(uid, url);
-      },
-      () => {
-        // Okuma izni yok / hata: bilgi yok say, kopya adrese düşülür
-      },
-    );
-    w = { count: 1, unsub, teardownTimer: null };
-    watchers.set(uid, w);
-  }
-
-  let released = false;
-  return () => {
-    if (released) return;
-    released = true;
-    const cur = watchers.get(uid);
-    if (!cur) return;
-    cur.count -= 1;
-    if (cur.count <= 0) {
-      cur.teardownTimer = setTimeout(() => {
-        const again = watchers.get(uid);
-        if (again && again.count <= 0) {
-          try { again.unsub(); } catch (e) {}
-          watchers.delete(uid);
-        }
-      }, TEARDOWN_DELAY_MS);
-    }
-  };
+function fetchAvatar(uid) {
+  if (inFlight.has(uid)) return;
+  inFlight.add(uid);
+  getDoc(doc(db, "users", uid))
+    .then((snap) => {
+      fetchedAt.set(uid, Date.now());
+      queuePhoto(uid, snap.exists() ? snap.data().photoURL || null : null);
+    })
+    .catch(() => {
+      // Okuma izni yok / hata: bilgi yok say, kopya adrese düşülür
+    })
+    .finally(() => inFlight.delete(uid));
 }
 
-/** Oturum kapanınca tüm dinleyicileri ve önbelleği temizle */
+/**
+ * uid'nin fotoğrafını hazır eder (gerekirse bir kez okur). Eski canlı-dinleyici arayüzüyle uyum için bırakma
+ * fonksiyonu döner; artık bırakılacak bir dinleyici yoktur.
+ */
+export function watchAvatar(uid) {
+  if (uid) {
+    const at = fetchedAt.get(uid);
+    if (at === undefined || Date.now() - at > REFRESH_AFTER_MS) fetchAvatar(uid);
+  }
+  return () => {};
+}
+
+/** Başka bir dinleyicinin zaten okuduğu güncel adresleri aktarır (ek okuma yok): { uid: photoURL | null } */
+export function primeAvatars(map) {
+  if (!map) return;
+  const now = Date.now();
+  for (const uid of Object.keys(map)) {
+    fetchedAt.set(uid, now);
+    queuePhoto(uid, map[uid] || null);
+  }
+}
+
+/** Oturum kapanınca önbelleği temizle */
 export function resetAvatarStore() {
-  watchers.forEach((w) => {
-    clearTimeout(w.teardownTimer);
-    try { w.unsub(); } catch (e) {}
-  });
-  watchers.clear();
+  fetchedAt.clear();
   pending = null;
   useAvatarStore.setState({ photos: {} });
 }

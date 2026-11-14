@@ -3,8 +3,8 @@
 **Netrex**, Discord benzeri bir masaüstü (ve web) sesli sohbet / mesajlaşma uygulamasıdır. Sunucular, sesli ve yazılı kanallar, arkadaşlar ve DM, ekran paylaşımı, birlikte izleme (Watch Party), uzamsal ses ve yerleşik 3B oyunlar içerir.
 
 ![Version](https://img.shields.io/badge/version-0.0.1-blue.svg)
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
-![Electron](https://img.shields.io/badge/electron-39-47848f.svg)
+![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
+![Tauri](https://img.shields.io/badge/tauri-2-24c8db.svg)
 ![Next.js](https://img.shields.io/badge/next.js-14-black.svg)
 
 ## İçindekiler
@@ -60,7 +60,7 @@
 - Yazıyor göstergesi, okunmamış sayacı, hızlı mesajlar
 
 ### Hesap ve Kişiselleştirme
-- Google OAuth (Electron içinde) ve anonim giriş
+- Google ile giriş (sistem tarayıcısı üzerinden) ve anonim giriş
 - Profil fotoğrafı / arka planı, profil teması, hazır ve özel gradyanlar
 - Çevrimiçi durum (presence), boşta algılama, oyun etkinliği, hızlı durum
 - Ayarlar: Hesabım, Mikrofon ve Ses, Kamera, Sesler, Görünüm, Bildirimler, Kısayollar, Overlay, Performans, Genel, Hakkında (+ macOS kurulumu); ayarlar içinde arama
@@ -69,7 +69,7 @@
 Sesli odadayken oynanan, tarayıcı içi 3B oyunlar (Air Hockey, Ping Pong, Bilardo, Tabu, Emlak, Okey) ve ses odası gerektirmeyen **tek kişilik** oyunlar: Elo'lu Satranç (13 botluk merdiven) ve Tepe Tırmanışı. Ayrıntılar [aşağıda](#netrex-games).
 
 ### Uygulama
-- Otomatik güncelleme (`electron-updater`, GitHub Releases), güncelleme splash ekranı
+- İmzalı otomatik güncelleme (GitHub Releases), güncelleme ekranı
 - Sistem tepsisi, özel başlık çubuğu, kapanışta temizlik (cleanup) akışı
 - Aynı kod tabanından **web** sürümü (Vercel vb.)
 
@@ -79,23 +79,25 @@ Sesli odadayken oynanan, tarayıcı içi 3B oyunlar (Air Hockey, Ping Pong, Bila
 
 | Katman | Teknoloji |
 | --- | --- |
-| Masaüstü | Electron 39, electron-builder, electron-updater, electron-store, `uiohook-napi` |
-| Arayüz | Next.js 14 (App Router), React 19, Tailwind CSS, Framer Motion, Lucide, Sonner |
+| Masaüstü | Tauri 2 (Rust): pencere/tepsi, global kısayollar, overlay pencereleri, ekran ve uygulama sesi yakalama (Windows Graphics Capture + WASAPI), imzalı otomatik güncelleme |
+| Arayüz | Next.js 14 (App Router, statik export), React 19, Tailwind CSS, Framer Motion, Lucide, Sonner |
 | State | Zustand (+ persist), Immer |
-| Gerçek zamanlı ses/video | LiveKit (`livekit-client`, `livekit-server-sdk`, track-processors) |
-| Veri / kimlik | Firebase Auth, Firestore, Realtime Database (presence, ses durumu, komutlar) |
+| Gerçek zamanlı ses/video | LiveKit (`livekit-client`, `@livekit/components-react`) |
+| Veri / kimlik | Firebase Auth, Firestore, Realtime Database (varlık, ses durumu, komutlar) |
+| Sunucu | Vercel serverless (`server/`): LiveKit token, Cloudinary imzalı yükleme ve silme |
 | Ses işleme | Web Audio API, RNNoise (WASM), AudioWorklet |
-| Medya | `react-player`, Cloudinary (görsel yükleme) |
+| Medya | `react-player`, Cloudinary |
 | Oyunlar | Three.js, Rapier3D (`@dimforge/rapier3d-compat`) |
-| Liste performansı | `react-virtuoso`, `react-window`, `@dnd-kit` |
-| CI/CD | GitHub Actions (Windows / macOS / Linux build + release) |
+| Testler | `node --test` (birim), Firebase emülatörü (güvenlik kuralları), Playwright (uçtan uca), `cargo test` |
+| CI/CD | GitHub Actions: `ci.yml` (lint + testler), `release.yml` (Windows kurucusu) |
 
 ---
 
 ## Kurulum
 
 ### Gereksinimler
-- Node.js 18+ ve npm
+- Node.js 20+ ve npm
+- Rust (stable) ve Tauri 2 önkoşulları (Windows: WebView2 + MSVC derleme araçları)
 - Bir **Firebase** projesi (Authentication, Firestore, Realtime Database)
 - Bir **LiveKit** sunucusu veya LiveKit Cloud hesabı
 - (Opsiyonel) Görsel yükleme için Cloudinary hesabı
@@ -103,50 +105,36 @@ Sesli odadayken oynanan, tarayıcı içi 3B oyunlar (Air Hockey, Ping Pong, Bila
 ### 1. Projeyi klonla ve bağımlılıkları yükle
 
 ```bash
-git clone https://github.com/MuratGuelr/netrex-standalone.git
-cd netrex-standalone
+git clone https://github.com/Netrex-Voice/Netrex-App-Rust.git
+cd Netrex-App-Rust
 npm install
 ```
 
 ### 2. Ortam değişkenleri
 
-`env.example` (veya `.env.local.example`) dosyasını `.env.local` olarak kopyalayıp doldurun:
+`.env.local.example` dosyasını `.env.local` olarak kopyalayıp doldurun. İki tür değer vardır:
 
-```env
-# Firebase
-NEXT_PUBLIC_FIREBASE_API_KEY=
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
-NEXT_PUBLIC_FIREBASE_APP_ID=
+- **Herkese açık** (`NEXT_PUBLIC_*`): Firebase ayarları, Cloudinary bulut adı, Netrex sunucu adresi. Uygulamaya gömülür.
+- **Gizli** (LiveKit / Cloudinary anahtarları): yalnızca **Netrex sunucusunda** (`server/`, Vercel ortam değişkenleri) durur.
+  Yerel `.env.local` içinde bulunsalar bile derlenen uygulamaya **gömülmezler** (`src-tauri/build.rs` yalnızca
+  `NEXT_PUBLIC_*` satırlarını alır).
 
-# LiveKit (tek sunucu)
-NEXT_PUBLIC_LIVEKIT_URL=wss://your-livekit-server.livekit.cloud
-LIVEKIT_API_KEY=
-LIVEKIT_API_SECRET=
+`NEXT_PUBLIC_NETREX_API_URL` tanımlıysa uygulama token/yükleme/silme için Netrex sunucusunu kullanır (önerilen).
+Tanımsızsa yerel geliştirme yoluna düşer: Rust, `.env.local` içindeki LiveKit anahtarlarıyla token üretir.
 
-# LiveKit (sunucu havuzu — opsiyonel, en fazla 20)
-# LIVEKIT_SERVERS_0_URL= / LIVEKIT_SERVERS_0_KEY= / LIVEKIT_SERVERS_0_SECRET=
-# LIVEKIT_SERVERS_1_URL= ...
+### 3. Netrex sunucusu (Vercel)
 
-# Cloudinary (opsiyonel)
-NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=
-NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET=
-CLOUDINARY_API_SECRET=
-```
+Kurulum ve uç noktalar: [server/README.md](server/README.md).
 
-> `.env.local` git'e eklenmez. `npm run electron-dev` ve paketleme öncesi `scripts/copy-env.js` bu dosyayı `electron/` altına kopyalar (Electron ana süreci LiveKit token üretimi için kullanır).
+### 4. Firebase
 
-**LiveKit sunucu havuzu:** Ücretsiz plan dakika limitini aşmak için birden fazla LiveKit hesabı tanımlayabilirsiniz; sistem sunucular arasında otomatik geçiş yapar.
-
-### 3. Firebase
-
-1. **Authentication**: Google sağlayıcısını etkinleştirin (anonim girişi de açın).
+1. **Authentication**: Google sağlayıcısını etkinleştirin (isterseniz anonim girişi de).
 2. **Firestore** ve **Realtime Database** oluşturun.
 3. Güvenlik kurallarını repodaki dosyalardan yayınlayın:
-   - `firestore.rules` → Firestore
-   - `database.rules.json` → Realtime Database (`room_presence`, `user_voice_state`, `user_presence`, `voice_commands`)
+   ```bash
+   npx firebase deploy --only firestore:rules,database --project <proje-kimliği>
+   ```
+   Kurallar `npm run test:rules` ile yerel emülatörde test edilir (Java gerekir).
 
 ---
 
@@ -154,64 +142,45 @@ CLOUDINARY_API_SECRET=
 
 | Komut | Açıklama |
 | --- | --- |
-| `npm run electron-dev` | Next dev sunucusu + Electron (masaüstü geliştirme) |
-| `npm run dev` | Yalnızca Next.js dev sunucusu (`localhost:3000`) |
+| `npm run tauri:dev` | Masaüstü geliştirme (Next dev sunucusu + Tauri) |
+| `npm run dev` | Yalnızca Next.js dev sunucusu (`localhost:3100`) |
 | `npm run dev:web` | Web hedefi ile dev (`NEXT_PUBLIC_BUILD_TARGET=web`) |
-| `npm run build` | Static export (`out/`) + `postbuild` ile Electron yol düzeltmeleri |
-| `npm run build:web` | Web (sunucu modlu) build — API route'ları çalışır |
-| `npm run electron-pack` | Build + installer üretimi (`dist/`) |
-| `npm run release` | Build + GitHub Releases'a yayınlama |
-| `npm run test:games` | Oyun motoru testleri (`node --test`) |
-| `npm run lint` | Next lint |
+| `npm run build` | Statik export (`out/`) |
+| `npm run tauri:build` | Kurucu üretimi (Windows: NSIS) |
+| `npm run lint` | ESLint |
+| `npm test` | Birim testleri (sohbet toplu yazma + oyun motorları) |
+| `npm run test:rules` | Firestore / Realtime Database kural testleri (emülatör) |
+| `npx playwright test` | Uçtan uca testler (emülatörler + yerel LiveKit; bkz. `e2e/`) |
+| `cd server && npm test` | Sunucu testleri |
+| `cd src-tauri && cargo test` | Rust testleri |
 
-**İki hedef, tek kod tabanı:** `next.config.js` varsayılanda Electron için `output: "export"` (statik) üretir; `NEXT_PUBLIC_BUILD_TARGET=web` veya `VERCEL=1` iken normal Next.js sunucu modunda derler (LiveKit token, YouTube playlist, Cloudinary silme gibi `app/api/*` route'ları yalnızca bu modda çalışır).
-
-**Çıktılar:** Windows → NSIS (`Netrex-Setup-<sürüm>.exe`), macOS → dmg + zip (x64 / arm64), Linux → AppImage.
+**İki hedef, tek kod tabanı:** `next.config.js` varsayılanda masaüstü için `output: "export"` (statik) üretir;
+`NEXT_PUBLIC_BUILD_TARGET=web` veya `VERCEL=1` iken web sürümü olarak derler. Web sürümü de token/yükleme/silme için
+aynı Netrex sunucusunu kullanır.
 
 ---
 
 ## Proje Yapısı
 
 ```
-netrex-standalone/
-├── app/                      # Next.js App Router
-│   ├── page.js               # Ana uygulama (giriş / ana ekran)
-│   ├── view/                 # Bağımsız görsel görüntüleyici sayfası
-│   └── api/                  # livekit-token, livekit-server-info, youtube-playlist, cloudinary-delete
-├── electron/
-│   ├── main.js               # Ana süreç girişi
-│   ├── preload.js            # IPC köprüsü (window.netrex)
-│   ├── managers/             # window, tray, update, input (global hotkey), ipcHandlers, youtubePlaylist
-│   └── overlays/             # pointer-overlay.html, ticker-overlay.html
+├── app/                      # Next.js App Router (ana uygulama, /view görsel görüntüleyici)
 ├── src/
-│   ├── components/
-│   │   ├── layout/           # AppShell, ServerRail, Sidebar, Titlebar, mobil bileşenler
-│   │   ├── server/           # Sunucu / kanal / üye / davet modalları
-│   │   ├── active-room/      # Aktif sesli oda: katılımcılar, ekran paylaşımı, stage, ses grupları, overlay köprüsü
-│   │   ├── ChatView/         # Mesaj listesi, girdi, bağlam menüsü, görsel overlay
-│   │   ├── friends/          # Arkadaşlar, DM, arama modalları
-│   │   ├── watch-party/      # Oynatıcı, çalma listesi, kontroller
-│   │   ├── settings/         # Ayarlar sekmeleri ve arama
-│   │   ├── pages/ ui/        # Giriş/yükleme ekranları, ortak UI bileşenleri
-│   │   └── …                 # Splash, güncelleme, moderasyon vb.
+│   ├── components/           # layout, server, active-room, ChatView, friends, watch-party, settings, ui
 │   ├── modules/games/        # Netrex Games (motorlar, görünümler, Three.js sahneleri, testler)
-│   ├── store/                # Zustand store'ları (auth, server, chat, dm, friend, settings, watchParty, spatialAudio, …)
-│   ├── hooks/                # Presence, ses işleme, mic guard, spatial audio, watch party, ses grupları, …
+│   ├── store/                # Zustand store'ları (auth, server, chat, dm, friend, settings, …)
+│   ├── hooks/                # Varlık, ses işleme, mic guard, uzamsal ses, watch party, ses grupları, …
 │   ├── audio/                # Paylaşılan AudioContext, voiceProcessor, spatialEngine
 │   ├── services/             # spatialAudioService, watchPartyService
-│   ├── lib/                  # firebase, rtdbPresence, platformBridge (Electron/web ayrımı)
-│   ├── constants/            # appConfig (limitler), watchPartyConstants
-│   └── utils/                # keyMap, livekitPool, micConstraints, pointerFx, cleanup, …
-├── public/
-│   ├── sounds/               # Uygulama ses efektleri
-│   ├── rnnoise-suppressor.worklet.js
-│   └── voice-processor.worklet.js
-├── scripts/                  # copy-env, fix-electron-paths, bundle-rnnoise-worklet, mac-fix.command
-├── build-resources/          # macOS entitlements
-├── .github/workflows/        # release.yml (çok platformlu build & release)
+│   ├── lib/                  # firebase, rtdbPresence, tauriBridge (window.netrex), platformBridge, netrexApi
+│   └── utils/                # imageUpload, keyMap, voiceCommands, cleanup, …
+├── src-tauri/                # Rust: pencere yaşam döngüsü, kısayollar, overlay, yakalama, güncelleme, OAuth
+├── server/                   # Vercel serverless: LiveKit token, Cloudinary imzalı yükleme/silme
+├── public/                   # sesler, overlay sayfaları, AudioWorklet'ler
+├── rules-tests/              # Güvenlik kuralı testleri
+├── e2e/                      # Playwright testleri ve yerel test ortamı (emülatörler + LiveKit)
 ├── firestore.rules           # Firestore güvenlik kuralları
 ├── database.rules.json       # Realtime Database kuralları
-└── release_v*.md             # Sürüm notları
+└── .github/workflows/        # ci.yml, release.yml
 ```
 
 ---
@@ -220,26 +189,31 @@ netrex-standalone/
 
 ```
 ┌──────────────────────────┐
-│ Electron ana süreç       │  pencere, tray, güncelleme, global hotkey (uiohook),
-│ electron/main.js         │  OAuth, overlay pencereleri, LiveKit token
+│ Tauri / Rust             │  pencere, tepsi, güncelleme, global kısayollar,
+│ src-tauri/               │  OAuth, overlay pencereleri, ekran/ses yakalama
 └────────────┬─────────────┘
-             │ IPC (preload.js → window.netrex)
+             │ komutlar + olaylar (src/lib/tauriBridge.js → window.netrex)
 ┌────────────▼─────────────┐
-│ Next.js renderer (React) │  UI, Zustand store'ları, Web Audio, oyunlar
-└───────┬──────────┬───────┘
-        │          │
-   Firebase      LiveKit
- (Auth, Firestore, (ses/video/ekran, data channel,
-  Realtime DB)      participant metadata)
+│ Next.js arayüzü (React)  │  UI, Zustand store'ları, Web Audio, oyunlar
+└───┬──────────┬───────┬───┘
+    │          │       │
+ Firebase   LiveKit   Netrex sunucusu (Vercel)
+ (Auth, Firestore,    (token, imzalı yükleme, silme:
+  Realtime DB)         secret'lar yalnızca burada)
 ```
 
-- **Paketlenmiş uygulama HTTP üzerinden yüklenir.** `file://` yerine `127.0.0.1:17760` üzerinde küçük bir statik sunucu kullanılır; `file://` altında Chromium compositor'ı boşta bile yüksek CPU harcıyordu.
-- **Platform ayrımı:** `src/lib/platformBridge.js` Electron'a özgü özellikleri (hotkey, overlay, güncelleme) web'de güvenle devre dışı bırakır.
 - **Veri dağılımı:**
-  - *Firestore*: kullanıcılar, sunucular (üyeler, banlar, kanallar), davetler, arkadaşlıklar, DM, mesajlar
-  - *Realtime Database*: anlık varlık bilgisi (`user_presence`, `room_presence`, `user_voice_state`) ve tek kullanımlık sesli kanal komutları (`voice_commands`)
-  - *LiveKit*: ses/video/ekran, yazıyor bilgisi ve oyun trafiği gibi anlık veri
-- **Maliyet bilinci:** heartbeat aralıkları (sesteyken 2 dk, boşta 5 dk), toplu yazma (batch), sayfalı mesaj yükleme, ücretsiz katmanlara göre ayarlanmış dinleyiciler.
+  - *Firestore*: kullanıcılar, sunucular (üyeler, yasaklar, kanallar, roller), davetler, arkadaşlıklar, DM, mesajlar
+  - *Realtime Database*: anlık varlık bilgisi (`user_presence`, `room_presence`, `user_voice_state`) ve tek kullanımlık
+    sesli kanal komutları (`voice_commands`)
+  - *LiveKit*: ses/video/ekran, sohbet mesajlarının canlı iletimi, yazıyor bilgisi ve oyun trafiği
+- **Güvenlik:** yetkiler Firestore kurallarında denetlenir (rol izinleri `servers/{id}/meta/perms` dizininden okunur);
+  token sunucusu, kullanıcının odaya girme yetkisini aynı kurallar üzerinden doğrular. Ayrıntı: `firestore.rules`.
+- **Maliyet bilinci:**
+  - Sunucu kanalı mesajları LiveKit ile anında iletilir, Firestore'a **toplu** yazılır: bir yazarın ~20 sn içindeki
+    mesajları tek belge = tek yazma (`src/store/chatBatch.js`). Firestore'da canlı mesaj dinleyicisi yoktur.
+  - "Şu an bağlı mı?" bilgisi Realtime Database'den gelir; Firestore heartbeat'i yalnızca yedektir (30 dk).
+  - Profil fotoğrafları kullanıcı başına bir kez okunup önbelleğe alınır.
 
 ### Netrex Games
 
@@ -264,42 +238,32 @@ Testler: `npm run test:games`.
 
 ## Sürüm Yayınlama
 
-1. `package.json` sürümünü yükseltin (`npm version patch|minor|major`) ve `release_vX.Y.Z.md` notunu yazın.
-2. `vX.Y.Z` etiketini push edin → **GitHub Actions** (`.github/workflows/release.yml`) Windows, macOS (x64 + arm64) ve Linux paketlerini derleyip GitHub Release'e yükler. Workflow elle de (`workflow_dispatch`) platform seçerek çalıştırılabilir.
-3. Kurulu uygulamalar `electron-updater` ile yeni sürümü otomatik bulur.
+1. `package.json`, `src-tauri/tauri.conf.json` ve `src-tauri/Cargo.toml` içindeki sürümü yükseltin; `release_vX.Y.Z.md` notunu yazın.
+2. GitHub > Actions > **Windows sürümü** > *Run workflow*. Kurucu ve güncelleme imzaları derlenir, GitHub Release'e
+   (varsayılan: taslak) yüklenir. Gerekli depo gizlileri `release.yml` başında yazılıdır.
+3. Kurulu uygulamalar yeni sürümü kendisi bulur, indirir ve imzasını doğrulayıp kurar.
 
-Yerelden yayınlamak için: `npm run release` (GitHub token gerekir).
+> Güvenlik kuralları ya da sunucu, eski istemcilerle uyumsuz biçimde değiştiyse önce yeni istemciyi yayınlayın;
+> geçiş süresince sunucuda `ALLOW_LEGACY_CLIENTS=1` kullanılabilir (bkz. `server/README.md`).
 
 ---
 
 ## Sorun Giderme
 
-**Electron açılmıyor / LiveKit bağlanamıyor** — `.env.local` var mı ve `electron/.env.local` olarak kopyalandı mı (`node scripts/copy-env.js`)? `NEXT_PUBLIC_LIVEKIT_URL` `wss://` ile başlamalı.
+**LiveKit bağlanamıyor** — `https://<sunucu>/api/health` çıktısında `livekitServers` 0'dan büyük mü? Uygulama
+`NEXT_PUBLIC_NETREX_API_URL` ile mi derlendi? "you do not have access to this room" hatası, kullanıcının o sunucunun
+üyesi olmadığını (ya da güvenlik kurallarının yayınlanmadığını) gösterir.
 
-**Build sonrası `/_next/` yolları bozuk** — `node scripts/fix-electron-paths.js` (normalde `postbuild` çalıştırır).
+**Global kısayollar çalışmıyor** — Yalnızca masaüstü uygulamasında çalışır; Ayarlar → Kısayollar'dan atama yapın.
 
-**Global kısayollar çalışmıyor** — Yalnızca Electron'da çalışır; Ayarlar → Kısayollar'dan atama yapın. macOS'ta Erişilebilirlik izni gerekir.
+**Kullanıcılar sol listeden kayboluyor / "Bağlanıyor" takılıyor** — Realtime Database kurallarının
+(`database.rules.json`) yayınlandığından emin olun.
 
-**Kullanıcılar sol listeden kayboluyor / "Bağlanıyor" takılıyor** — Realtime Database kurallarının (`database.rules.json`) yayınlandığından emin olun.
+**Yetkili üye atamıyor / kanal düzenleyemiyor ("permission-denied")** — Rol izinleri `servers/{id}/meta/perms`
+dizininden okunur. Bu belge, sunucu sahibi (ya da Rolleri Yönet izni olan biri) güncel sürümle sunucuyu açtığında
+kendiliğinden yazılır.
 
-**macOS: "Netrex zarar görmüş, açılamıyor"** — Uygulama ad-hoc imzalıdır (Apple notarization yok). `Applications`'a taşıdıktan sonra:
-
-```bash
-xattr -cr /Applications/Netrex.app
-```
-
-(Repodaki `scripts/mac-fix.command` aynı işi yapar; Ayarlar → macOS Kurulumu'nda da yönergeler vardır.)
-
-**macOS: Ekran paylaşımı / mikrofon / kamera izni sürekli isteniyor** — Her yeni sürümde imza değiştiği için eski izin kaydı geçersiz kalır:
-
-```bash
-tccutil reset ScreenCapture com.netrex.app
-tccutil reset Camera com.netrex.app
-tccutil reset Microphone com.netrex.app
-tccutil reset Accessibility com.netrex.app
-```
-
-Netrex'i tamamen kapatıp (Cmd+Q) açın, izinleri verin ve **bir kez daha kapatıp açın**; ekran kaydı izni yeniden başlatmadan devreye girmez. macOS'ta ekran paylaşımında sistem sesi desteklenmez.
+**Günlük dosyası** — `%LOCALAPPDATA%\com.netrex.app\logs\netrex.log`
 
 ---
 

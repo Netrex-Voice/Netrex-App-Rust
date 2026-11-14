@@ -153,7 +153,7 @@ fn valid_action(action: &str) -> bool {
 /// Yalnızca teşhis modunda: kanca sayaçları.
 #[tauri::command]
 pub fn debug_hook_stats() -> String {
-    if std::env::var_os("NETREX_INPUT_TRACE").is_none() {
+    if !cfg!(debug_assertions) || std::env::var_os("NETREX_INPUT_TRACE").is_none() {
         return String::new();
     }
     #[cfg(windows)]
@@ -176,7 +176,8 @@ pub fn debug_hook_stats() -> String {
 /// çalıştığını, çapraz-süreç enjeksiyon güvenilmezliğine takılmadan sınamak için).
 #[tauri::command]
 pub fn debug_inject_key(scan: u16, extended: bool) -> bool {
-    if std::env::var_os("NETREX_INPUT_TRACE").is_none() {
+    // Tuş enjeksiyonu yayın sürümünde ASLA çalışmaz (ortam değişkeni verilse bile)
+    if !cfg!(debug_assertions) || std::env::var_os("NETREX_INPUT_TRACE").is_none() {
         return false;
     }
     #[cfg(windows)]

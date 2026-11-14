@@ -8,7 +8,7 @@ import Button from "@/src/components/ui/Button";
 import { useServerStore } from "@/src/store/serverStore";
 
 export default function InvitesTab({ invites, onCreate, serverId, userId, fetchInvites }) {
-  const { deleteInvite } = useServerStore();
+  const deleteInvite = useServerStore((s) => s.deleteInvite);
   const [deleteId, setDeleteId] = useState(null);
 
   useEffect(() => {

@@ -31,6 +31,15 @@ export default function ScreenShareModal({ isOpen, onClose, onStart }) {
 
   // YENİ: Ses Paylaşım Ayarı
   const [withAudio, setWithAudio] = useState(true);
+  // İmleç yayına dahil edilsin mi? (Tercih hatırlanır.) Bazı oyunlarda Windows'un imleçli yakalaması oyunun kendi
+  // imlecini gizleyebiliyor; böyle durumda kullanıcı bunu kapatır.
+  const [withCursor, setWithCursorState] = useState(() => {
+    try { return localStorage.getItem("netrex_share_cursor") !== "0"; } catch { return true; }
+  });
+  const setWithCursor = (v) => {
+    setWithCursorState(v);
+    try { localStorage.setItem("netrex_share_cursor", v ? "1" : "0"); } catch { /* yoksay */ }
+  };
   const [audioMode, setAudioMode] = useState("system"); // "system" | "app" - Ekran için sistem, uygulama için uygulama
 
   // Windows masaüstü (Tauri): yakalama Rust'ta (WASAPI uygulama bazlı) yapılır; Netrex'in kendi sesi (WebView2 süreci)
@@ -150,6 +159,7 @@ export default function ScreenShareModal({ isOpen, onClose, onStart }) {
       sourceId: selectedSourceId,
       withAudio,
       audioMode: withAudio ? finalAudioMode : null, // Ses kapalıysa null
+      withCursor,
     });
     onClose();
   };
@@ -672,6 +682,34 @@ export default function ScreenShareModal({ isOpen, onClose, onStart }) {
                       </span>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* İmleç (yalnızca masaüstü uygulaması: yakalamayı Rust yapar) */}
+              {selectedSourceData && typeof window !== "undefined" && window.netrex?.isTauri && (
+                <div className="glass-strong p-4 rounded-2xl border border-white/20 flex items-center justify-between gap-4">
+                  <div>
+                    <div className="text-white font-bold text-sm mb-1">İmleci Yayında Göster</div>
+                    <div className="text-[#949ba4] text-xs">
+                      Oyun oynarken kendi imleciniz kayboluyorsa bunu kapatın.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={withCursor}
+                    aria-label="İmleci yayında göster"
+                    onClick={() => setWithCursor(!withCursor)}
+                    className={`w-14 h-8 rounded-full transition-colors duration-300 border-2 relative shrink-0 ${
+                      withCursor ? "bg-green-500 border-green-400/50" : "bg-[#404249] border-white/10"
+                    }`}
+                  >
+                    <div
+                      className={`absolute top-[2px] left-[2px] w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300 ${
+                        withCursor ? "translate-x-[26px]" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
                 </div>
               )}
 

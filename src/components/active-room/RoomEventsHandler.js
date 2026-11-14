@@ -97,7 +97,7 @@ export default function RoomEventsHandler({
   const notifyOnLeave = useSettingsStore(state => state.notifyOnLeave);
   const notificationSound = useSettingsStore(state => state.notificationSound);
   const setInVoiceRoom = useSettingsStore(state => state.setInVoiceRoom);
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
 
   // Bildirim izni kontrolü ve isteği
   useEffect(() => {

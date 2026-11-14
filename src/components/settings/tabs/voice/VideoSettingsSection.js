@@ -1,16 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { Camera, Video, VideoOff } from "lucide-react";
-import { useRoomContext } from "@livekit/components-react";
+import { useOptionalRoomContext } from "@/src/hooks/useOptionalRoomContext";
 import { useSettingsStore } from "@/src/store/settingsStore";
 import ToggleSwitch from "../../ToggleSwitch";
 
 export default function VideoSettingsSection({ videoInputs, onDevicesChanged }) {
-  let room;
-  try {
-    room = useRoomContext();
-  } catch (e) {
-    // room context optional
-  }
+  const room = useOptionalRoomContext(); // ayarlar oda dışında da açılabilir
 
   const enableCamera = useSettingsStore(s => s.enableCamera);
   const toggleEnableCamera = useSettingsStore(s => s.toggleEnableCamera);

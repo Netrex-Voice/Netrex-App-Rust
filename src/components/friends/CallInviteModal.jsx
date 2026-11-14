@@ -10,11 +10,14 @@ import UserPhoto from "@/src/components/ui/UserPhoto";
 import { AvatarFallback } from "@/src/components/ui/Avatar";
 import { toast } from "sonner";
 import { createPortal } from "react-dom";
+import { useShallow } from "zustand/react/shallow";
 
 export default function CallInviteModal({ roomId, onClose }) {
-  const { user } = useAuthStore();
-  const { friends } = useFriendStore();
-  const { openOrCreateConversation, sendMessage } = useDMStore();
+  const user = useAuthStore((s) => s.user);
+  const friends = useFriendStore((s) => s.friends);
+  const { openOrCreateConversation, sendMessage } = useDMStore(
+    useShallow((s) => ({ openOrCreateConversation: s.openOrCreateConversation, sendMessage: s.sendMessage })),
+  );
   const [searchTerm, setSearchTerm] = useState("");
   const [isInviting, setIsInviting] = useState(false);
 

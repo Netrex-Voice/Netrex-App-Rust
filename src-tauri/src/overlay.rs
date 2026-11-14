@@ -183,6 +183,11 @@ fn build_window(app: &AppHandle, label: &'static str, page: &str) -> Result<Webv
         .minimizable(false)
         .focused(false)
         .focusable(false)
+        // Ekran yakalamaya DAHİL OLMASIN (Windows: WDA_EXCLUDEFROMCAPTURE). İşaretçi overlay'i birincil monitörün
+        // tamamını kaplayan şeffaf bir penceredir; Windows Graphics Capture bazı sistemlerde şeffaf WebView2
+        // penceresini saydam değil koyu/gri bir katman olarak yakalıyor ve birincil ekranın yayını siyah/gri çıkıyordu
+        // (ikinci ekranda overlay olmadığı için sorun yoktu). Ayrıca izleyiciler overlay'i yayında görmemeli.
+        .content_protected(true)
         .visible(false);
     #[cfg(windows)]
     let builder = builder.additional_browser_args(crate::lifecycle::WEBVIEW2_BROWSER_ARGS);

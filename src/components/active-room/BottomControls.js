@@ -30,7 +30,7 @@ import { useWatchPartyStore } from "@/src/store/watchPartyStore";
 import { useWatchPartyPermission } from "@/src/hooks/useWatchPartyPermission";
 import { useAuthStore } from "@/src/store/authStore";
 import { startWatchParty, endWatchParty } from "@/src/services/watchPartyService";
-import { toastOnce } from "@/src/utils/toast";
+import { toast, toastOnce } from "@/src/utils/toast";
 import { useSpatialAudioStore } from "@/src/store/spatialAudioStore";
 import { VoiceGroupsControl } from "./VoiceGroupsUI";
 import GamesButton from "@/src/modules/games/GamesButton";
@@ -1055,6 +1055,7 @@ export default function BottomControls({
     sourceId,
     withAudio,
     audioMode,
+    withCursor = true,
   }) => {
     try {
       // Eğer zaten bir ekran paylaşımı varsa, önce onu durdur
@@ -1137,6 +1138,7 @@ export default function BottomControls({
           height,
           fps,
           audio: withAudio ? (audioMode === "app" || !isScreen ? "app" : "system") : false,
+          cursor: withCursor,
         });
       } else if (window.netrex && sourceId) {
         // Electron: getUserMedia ile chromeMediaSource kullan

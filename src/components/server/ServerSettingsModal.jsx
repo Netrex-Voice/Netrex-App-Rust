@@ -7,6 +7,7 @@ import { useServerStore } from "@/src/store/serverStore";
 import { useAuthStore } from "@/src/store/authStore";
 import { useServerPermission } from "@/src/hooks/useServerPermission";
 import Button from "@/src/components/ui/Button";
+import { useShallow } from "zustand/react/shallow";
 
 // ✅ OPTIMIZATION: Lazy load tabs - Only load when needed
 const OverviewTab = lazy(() => import("./settings-modal/OverviewTab"));
@@ -17,29 +18,11 @@ const BansTab = lazy(() => import("./settings-modal/BansTab"));
 const BadgesTab = lazy(() => import("./settings-modal/BadgesTab"));
 
 export default function ServerSettingsModal({ isOpen, onClose, initialTab = "overview" }) {
-  const { 
-    currentServer, 
-    roles, 
-    members, 
-    updateServer, 
-    deleteServer, 
-    createRole, 
-    updateRole, 
-    deleteRole, 
-    activeInvites,
-    fetchServerInvites, 
-    createInvite, 
-    badges, 
-    createBadge, 
-    updateBadge, 
-    deleteBadge, 
-    assignBadgeToMember, 
-    removeBadgeFromMember, 
-    fetchBans, 
-    unbanMember 
-  } = useServerStore();
+  const { currentServer, roles, members, updateServer, deleteServer, createRole, updateRole, deleteRole, activeInvites, fetchServerInvites, createInvite, badges, createBadge, updateBadge, deleteBadge, assignBadgeToMember, removeBadgeFromMember, fetchBans, unbanMember } = useServerStore(
+    useShallow((s) => ({ currentServer: s.currentServer, roles: s.roles, members: s.members, updateServer: s.updateServer, deleteServer: s.deleteServer, createRole: s.createRole, updateRole: s.updateRole, deleteRole: s.deleteRole, activeInvites: s.activeInvites, fetchServerInvites: s.fetchServerInvites, createInvite: s.createInvite, badges: s.badges, createBadge: s.createBadge, updateBadge: s.updateBadge, deleteBadge: s.deleteBadge, assignBadgeToMember: s.assignBadgeToMember, removeBadgeFromMember: s.removeBadgeFromMember, fetchBans: s.fetchBans, unbanMember: s.unbanMember })),
+  );
   
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   
   const [activeTab, setActiveTab] = useState(initialTab);
   const [showCreateRoleModal, setShowCreateRoleModal] = useState(false);

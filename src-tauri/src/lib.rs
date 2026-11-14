@@ -1,4 +1,5 @@
 mod audio_capture;
+mod audio_session;
 mod capture;
 mod cloudinary;
 mod envfile;
@@ -71,12 +72,12 @@ pub fn run() {
             app.manage(store::Store::load(&handle));
             app.manage(lifecycle::LifecycleState::default());
             app.manage(oauth::OAuthState::default());
-            app.manage(misc::CurrentUser::default());
             livekit::setup(&handle);
             cloudinary::setup(&handle);
             input::setup(&handle);
             overlay::setup(&handle);
             updater::setup(&handle);
+            audio_session::setup(&handle);
             lifecycle::setup(&handle)?;
             Ok(())
         })
@@ -89,10 +90,7 @@ pub fn run() {
             lifecycle::cleanup_complete,
             lifecycle::app_quit_force,
             oauth::start_oauth,
-            misc::is_admin,
-            misc::set_current_user_uid,
             misc::open_devtools,
-            misc::get_app_path,
             misc::get_resources_path,
             misc::open_external_link,
             input::start_input_listener,

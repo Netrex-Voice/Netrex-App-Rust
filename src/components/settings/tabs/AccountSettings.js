@@ -18,13 +18,16 @@ import {
   AccountActions,
 } from "../account-settings";
 import ProfileAvatarUploader from "../account-settings/ProfileAvatarUploader";
+import { useShallow } from "zustand/react/shallow";
 
 const AccountSettings = forwardRef(
   ({ onClose, scrollToSection, setScrollToSection, contentRef }, ref) => {
-    const { user, logout } = useAuthStore();
+    const { user, logout } = useAuthStore(
+    useShallow((s) => ({ user: s.user, logout: s.logout })),
+  );
     const profileColor = useSettingsStore((state) => state.profileColor);
     const setProfileColor = useSettingsStore((state) => state.setProfileColor);
-    const { servers } = useServerStore();
+    const servers = useServerStore((s) => s.servers);
     const lastSyncedProfileColorRef = useRef(null);
 
     const [isLoadingProfile, setIsLoadingProfile] = useState(true);

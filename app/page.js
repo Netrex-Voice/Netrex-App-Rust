@@ -11,7 +11,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useLayoutStore } from "@/src/store/layoutStore";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuthStore } from "@/src/store/authStore";
-import { toast } from "@/src/utils/toast";
+import { toast, chatToast } from "@/src/utils/toast";
 import { doc, updateDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { useVoiceCommands } from "@/src/hooks/useVoiceCommands";
 import { db } from "@/src/lib/firebase";
@@ -219,7 +219,16 @@ export default function Home() {
     // Ses çal (Her zaman çal)
     if (options.sound) playSound(options.sound);
 
-    // Bildirim gönder
+    // Uygulama öndeyken işletim sistemi bildirimi GÖSTERİLMEZ: WebView2 bu bildirimleri "tauri.localhost" adıyla
+    // gösteriyor ve zaten ekrana bakan kullanıcıya uygulamanın kendi bildirimi (toast) yeter.
+    const appFocused = typeof document !== "undefined" && !document.hidden && document.hasFocus();
+    if (appFocused) {
+      if (options.inApp) options.inApp();
+      return;
+    }
+
+    // Arka planda: işletim sistemi bildirimi (Ayarlar > Bildirimler'den kapatılabilir)
+    if (!useSettingsStore.getState().desktopNotifications) return;
     if ("Notification" in window) {
       if (Notification.permission === "granted") {
         try {
@@ -247,6 +256,10 @@ export default function Home() {
     }
   }, [playSound]);
 
+  // Bildirime tıklanınca ilgili DM konuşmasını aç (işleyici aşağıda tanımlanır; ref ile güncel hali çağrılır)
+  const openDmRef = useRef(null);
+  const openDmFromNotification = useCallback((convo) => openDmRef.current?.(convo), []);
+
   // --- 1. DM BİLDİRİMLERİ ---
   const prevUnreadTotal = useRef(0);
   const prevUnreadCounts = useRef({});
@@ -262,7 +275,16 @@ export default function Home() {
         if (count > prevCount && convo.lastMessage?.senderId !== user?.uid) {
            triggerNotification(convo.otherUser?.displayName || "Yeni Mesaj", {
              body: convo.lastMessage?.text || "Bir fotoğraf gönderdi",
-             sound: "message"
+             sound: "message",
+             // Uygulama öndeyken: sohbet mesajlarıyla aynı uygulama içi bildirim; tıklayınca konuşma açılır
+             inApp: () => chatToast({
+               username: convo.otherUser?.displayName || "Yeni Mesaj",
+               message: convo.lastMessage?.text || "Bir fotoğraf gönderdi",
+               channelName: "özel mesaj",
+               avatarColor: convo.otherUser?.profileColor,
+               onClick: () => openDmFromNotification(convo),
+             }),
+             onClick: () => openDmFromNotification(convo),
            });
         }
       });
@@ -270,7 +292,7 @@ export default function Home() {
 
     prevUnreadCounts.current = { ...unreadDMCounts };
     prevUnreadTotal.current = currentTotal;
-  }, [unreadDMCounts, conversations, user?.uid, triggerNotification]);
+  }, [unreadDMCounts, conversations, user?.uid, triggerNotification, openDmFromNotification]);
 
   // --- 2. ARKADAŞLIK İSTEĞİ BİLDİRİMLERİ ---
   const prevRequestsLength = useRef(0);
@@ -728,6 +750,8 @@ export default function Home() {
     setViewMode("chat");
     useChatStore.getState().setShowChatPanel(true);
   }, [selectConversation, friendsMode, showFriendsPanel]);
+  // Bildirimden DM açma (bkz. openDmFromNotification): her zaman güncel işleyici çağrılsın
+  openDmRef.current = handleSelectConversation;
 
   // ✅ DM Arama Başlatma
   const handleStartDMCall = useCallback((callRoomConfig) => {
@@ -938,6 +962,7 @@ export default function Home() {
       onGoHome={handleGoHome}
       onToggleFriendsMode={handleToggleFriendsMode}
       onOpenCreateModal={() => setShowAddServerSelectionModal(true)}
+      mobileNavKey={`${currentRoom?.id || ""}|${currentTextChannel || ""}|${activeConversation?.id || ""}|${showFriendsPanel}|${currentServer?.id || ""}`}
       sidebar={
         friendsMode ? (
           /* ✅ Friends Mode: DM Sidebar */
@@ -1099,6 +1124,7 @@ export default function Home() {
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               userId={user?.uid}
+              roomServerId={currentRoom.isDM ? null : currentRoom._serverId || null}
             />
           )}
         </div>

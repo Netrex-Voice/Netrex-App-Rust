@@ -21,7 +21,6 @@ import { useSpeakingStore } from "@/src/store/speakingStore";
 import { GroupChip, CardTalkStatus, WhisperHold } from "./VoiceGroupsUI";
 import { useAuthStore } from "@/src/store/authStore";
 import ScreenSharePreviewComponent from "./ScreenSharePreview";
-import { useRemoteSpeaking } from "@/src/hooks/useRemoteSpeaking";
 import UserPhoto from "@/src/components/ui/UserPhoto";
 
 const UserCard = ({
@@ -41,7 +40,9 @@ const UserCard = ({
 
   // ✅ CPU OPT: LiveKit VAD'in (useIsSpeaking) saniyede yüzlerce kez zorlayıcı State güncellemelerini Kestik! 
   // Orijinal hook'ları devre dışı bırakıp, sadece 250ms'lik (4 FPS) kontrollü sınırlı AudioLevel kullanacağız.
-  const audioLevelSpeaking = useRemoteSpeaking(participant, participant.isLocal);
+  // Konuşma bilgisi tek kaynaktan okunur: SpeakingPublisher ölçer (kartlar ekranda olmasa da), kart yalnızca gösterir.
+  // Değer susturma/sağırlaştırma durumunu zaten içerir.
+  const storeSpeaking = useSpeakingStore((s) => !!s.speakingParticipants[participant.identity]);
 
 
   const displayName = name || identity || "User";
@@ -75,7 +76,6 @@ const UserCard = ({
   const cameraMirrorEffect = useSettingsStore((s) => s.cameraMirrorEffect);
   const disableAnimations = useSettingsStore((s) => s.disableAnimations);
   const graphicsQuality = useSettingsStore((s) => s.graphicsQuality);
-  const localIsSpeaking = useSettingsStore((s) => s.localIsSpeaking);
   const storeIsMuted = useSettingsStore((s) => s.isMuted);
   const storeIsDeafened = useSettingsStore((s) => s.isDeafened);
   const useProfileColorForSpeaking = useSettingsStore((s) => s.useProfileColorForSpeaking ?? true);
@@ -179,13 +179,9 @@ const UserCard = ({
   const ringHighQualityRef = useRef(null);
   const ringPotatoRef = useRef(null);
 
-  const setSpeakingStore = useSpeakingStore(s => s.setSpeaking);
 
   useEffect(() => {
-    const rawIsSpeaking = participant.isLocal
-      ? localIsSpeaking
-      : audioLevelSpeaking;
-    const isSpeakingNow = rawIsSpeaking && !isMuted && !isDeafened;
+    const isSpeakingNow = storeSpeaking && !isMuted && !isDeafened;
 
     const applySpeakingStyles = (speaking) => {
       if (speakingIndicatorRef.current) speakingIndicatorRef.current.style.opacity = speaking ? "1" : "0";
@@ -212,30 +208,20 @@ const UserCard = ({
       applySpeakingStyles(false);
     }
     
-    // Global store senkronizasyonu
-    if (participant.identity) {
-      setSpeakingStore(participant.identity, isSpeakingNow);
-    }
-
     return () => {
-      if (participant.identity) {
-        setSpeakingStore(participant.identity, false);
-      }
       if (speakingTimerRef.current) {
         clearTimeout(speakingTimerRef.current);
         speakingTimerRef.current = null;
       }
     };
   }, [
-    audioLevelSpeaking,
-    localIsSpeaking,
+    storeSpeaking,
     isMuted,
     isDeafened,
     participant.identity,
     participant.isLocal,
     isPotatoMode,
     borderColor,
-    setSpeakingStore
   ]);
 
   const avatarSize = useMemo(() => {

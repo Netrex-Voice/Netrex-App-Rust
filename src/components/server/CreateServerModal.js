@@ -86,6 +86,8 @@ export default function CreateServerModal({ isOpen, onClose, onJoinClick }) {
       setIconType("emoji");
       setShowEmojiPicker(false);
       toast.success("Sunucu başarıyla oluşturuldu! 🎉");
+      // Yeni sunucuyu hemen aç (özellikle mobilde: sunucu listesi ekranda olmadığı için kullanıcı ana sayfada kalıyordu)
+      if (result.serverId) useServerStore.getState().selectServer(result.serverId);
       onClose();
     } else {
       toast.error(result.error || "Sunucu oluşturulamadı.");

@@ -41,6 +41,28 @@ function releaseCtx() {
   }
 }
 
+// Tüm kartlar TEK zamanlayıcıyı paylaşır: eskiden her katılımcı için ayrı bir 50 ms'lik setInterval çalışıyordu
+// (10 kişilik odada saniyede 200 ayrı uyanma). Kimse kalmayınca zamanlayıcı durur.
+const tickers = new Set();
+let sharedTimer = null;
+function addTicker(fn) {
+  tickers.add(fn);
+  if (!sharedTimer) {
+    sharedTimer = setInterval(() => {
+      tickers.forEach((t) => {
+        try { t(); } catch (e) {}
+      });
+    }, TICK_MS);
+  }
+}
+function removeTicker(fn) {
+  tickers.delete(fn);
+  if (tickers.size === 0 && sharedTimer) {
+    clearInterval(sharedTimer);
+    sharedTimer = null;
+  }
+}
+
 export function useRemoteSpeaking(participant, isLocal) {
   const [speaking, setSpeaking] = useState(false);
 
@@ -106,9 +128,9 @@ export function useRemoteSpeaking(participant, isLocal) {
       }
     };
 
-    const timer = setInterval(tick, TICK_MS);
+    addTicker(tick);
     return () => {
-      clearInterval(timer);
+      removeTicker(tick);
       unbind();
     };
   }, [participant, isLocal]);

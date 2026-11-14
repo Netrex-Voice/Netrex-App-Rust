@@ -63,6 +63,7 @@ import BottomControls from "./active-room/BottomControls";
 import StageManager from "./active-room/StageManager";
 import ScreenShareManager from "./active-room/ScreenShareManager";
 import GlobalChatListener from "./active-room/GlobalChatListener";
+import SpeakingPublisher from "@/src/components/active-room/SpeakingPublisher";
 import SettingsUpdater from "./active-room/SettingsUpdater";
 import ConnectionStatusIndicator from "./active-room/ConnectionStatusIndicator";
 import RoomEventsHandler from "./active-room/RoomEventsHandler";
@@ -436,6 +437,7 @@ export default function ActiveRoom({
   currentTextChannel,
   userId,
   isDMCall, // new prop check
+  roomServerId = null, // odanın ait olduğu sunucu (DM aramasında null): token sunucusu üyeliği bununla doğrular
 }) {
   // --- GLOBAL INPUT LISTENER (CPU OPTIMIZATION) ---
   useEffect(() => {
@@ -465,7 +467,7 @@ export default function ActiveRoom({
     };
   }, []);
 
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const [token, setToken] = useState("");
   const [showSettingsLocal, setShowSettingsLocal] = useState(false);
   const [showCallInviteModal, setShowCallInviteModal] = useState(false);
@@ -901,6 +903,7 @@ export default function ActiveRoom({
             identity,
             username,
             currentServerIndex,
+            roomServerId,
           );
           setToken(t);
 
@@ -1305,22 +1308,23 @@ export default function ActiveRoom({
             // 🔥 FIX: Ref'i YAZMA'DAN ÖNCE güncelle ki onSnapshot çift tetiklemesin
             serverIndexRef.current = targetIndex;
 
-            await setDoc(
-              poolRef,
-              {
-                activeServerIndex: targetIndex,
-                lastRotation: serverTimestamp(),
-                lastError: errorMessage,
-                lastErrorTime: serverTimestamp(),
-                serverCount: firebaseServerCount,
-              },
-              { merge: true },
-            );
-
-            console.log(
-              "✅ Firebase 'activeServerIndex' başarıyla güncellendi:",
-              targetIndex,
-            );
+            // Kurallar geçişi sınırlar (yalnızca bir sonraki sunucu, iki geçiş arası en az 20 sn). Yazma reddedilirse
+            // (başkası az önce döndürdü) yine de yerelde sıradaki sunucuya geçilir; diğerleri dinleyiciyle eşitlenir.
+            try {
+              await setDoc(
+                poolRef,
+                {
+                  activeServerIndex: targetIndex,
+                  lastRotation: serverTimestamp(),
+                  lastError: String(errorMessage || "").slice(0, 300),
+                  lastErrorTime: serverTimestamp(),
+                  serverCount: firebaseServerCount,
+                },
+                { merge: true },
+              );
+            } catch (writeError) {
+              console.warn("Havuz sırası yazılamadı, yerel geçiş yapılıyor:", writeError?.code || writeError);
+            }
           }
         } else {
           console.warn(
@@ -1541,6 +1545,7 @@ export default function ActiveRoom({
                         identity,
                         username,
                         serverIndex,
+                        roomServerId,
                       )
                       .then((t) => {
                         setToken(t);
@@ -1662,6 +1667,8 @@ export default function ActiveRoom({
       <MemoizedBackground disableEffects={disableBackgroundEffects} />
       <RemoteMicrophonePlayer />
       <ScreenShareAudioGate pinnedStreamIds={pinnedStreamIds} />
+      {/* Konuşma ölçümü: ekranda kart olsun olmasın (yayın izlerken de) oda boyunca çalışır */}
+      <SpeakingPublisher />
       <GlobalChatListener
         showChatPanel={showChatPanel}
         setShowChatPanel={setShowChatPanel}
@@ -1704,7 +1711,7 @@ export default function ActiveRoom({
       />
 
       <ModerationHandler
-        serverId={serverId}
+        serverId={roomServerId || serverId}
         setServerMuted={setServerMuted}
         setServerDeafened={setServerDeafened}
         setMutedBy={setMutedBy}
