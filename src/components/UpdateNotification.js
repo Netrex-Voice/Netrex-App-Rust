@@ -18,14 +18,21 @@ import {
 } from "lucide-react";
 import { useUpdateStore } from "@/src/store/updateStore";
 import { toast } from "@/src/utils/toast";
+import { useShallow } from "zustand/react/shallow";
 
+// Web'de otomatik güncelleme yok: hook sırası bozulmasın diye kontrol sarmalayıcıda yapılır
 export default function UpdateNotification() {
-  const { status, progress, updateInfo } = useUpdateStore();
+  if (typeof window !== 'undefined' && !window.netrex) return null;
+  return <UpdateNotificationInner />;
+}
+
+function UpdateNotificationInner() {
+  const { status, progress, updateInfo } = useUpdateStore(
+    useShallow((s) => ({ status: s.status, progress: s.progress, updateInfo: s.updateInfo })),
+  );
   const [show, setShow] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // 🌐 Web'de auto-update gösterme
-  if (typeof window !== 'undefined' && !window.netrex) return null;
 
   const handleRestart = () => {
     if (window.netrex) {

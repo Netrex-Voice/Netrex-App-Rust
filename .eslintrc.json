@@ -1,0 +1,13 @@
+{
+  "extends": "next/core-web-vitals",
+  "ignorePatterns": ["out/", ".next/", "src-tauri/", "server/", "tools/", "_reference/", "public/", "e2e/.output/"],
+  "rules": {
+    "react/no-unescaped-entities": "off",
+    "react/display-name": "off",
+    "@next/next/no-img-element": "off",
+    "react-hooks/exhaustive-deps": "warn",
+    "no-unused-vars": ["warn", { "args": "none", "varsIgnorePattern": "^_", "caughtErrors": "none" }],
+    "no-undef": "error"
+  },
+  "env": { "browser": true, "es2022": true, "node": true }
+}

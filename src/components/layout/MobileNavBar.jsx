@@ -3,11 +3,10 @@
 /**
  * 📱 MobileNavBar — Alt Navigasyon Çubuğu
  * Mobil web'de ServerRail'in yerini alır.
- * Tam ekran butonu, Sunucular, Mesajlar, Ayarlar ve Ana Sayfa barındırır.
+ * Ana Sayfa, Mesajlar, Sunucular, Kanallar/Sohbetler, Üyeler ve Ayarlar barındırır.
  */
 
-import { useState, useEffect } from "react";
-import { Home, MessageCircle, Server, Users, Settings, Maximize, Minimize } from "lucide-react";
+import { Home, MessageCircle, Server, Users, Settings, Hash, MessagesSquare } from "lucide-react";
 
 export default function MobileNavBar({
   friendsMode,
@@ -15,45 +14,12 @@ export default function MobileNavBar({
   onGoHome,
   onToggleFriendsMode,
   onOpenServers,
+  onOpenSidebar,
+  sidebarLabel = "Kanallar",
   onOpenMembers,
   onOpenSettings,
   messengerBadge = 0,
 }) {
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
-    return () => {
-      document.removeEventListener("fullscreenchange", handleFullscreenChange);
-      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
-    };
-  }, []);
-
-  const toggleFullscreen = () => {
-    try {
-      if (!document.fullscreenElement) {
-        if (document.documentElement.requestFullscreen) {
-          document.documentElement.requestFullscreen();
-        } else if (document.documentElement.webkitRequestFullscreen) {
-          document.documentElement.webkitRequestFullscreen();
-        }
-      } else {
-        if (document.exitFullscreen) {
-          document.exitFullscreen();
-        } else if (document.webkitExitFullscreen) {
-          document.webkitExitFullscreen();
-        }
-      }
-    } catch (e) {
-      console.warn("Fullscreen toggle error:", e);
-    }
-  };
-
   return (
     <nav className="mobile-bottom-nav mobile-only">
       {/* Home */}
@@ -88,6 +54,14 @@ export default function MobileNavBar({
         <span>Sunucular</span>
       </button>
 
+      {/* Kanallar (sunucu) / Sohbetler (mesajlar): sol kenar çubuğunu çekmece olarak açar */}
+      {onOpenSidebar && (
+        <button className="mobile-nav-item" onClick={onOpenSidebar}>
+          {sidebarLabel === "Kanallar" ? <Hash className="mobile-nav-icon" /> : <MessagesSquare className="mobile-nav-icon" />}
+          <span>{sidebarLabel}</span>
+        </button>
+      )}
+
       {/* Members (Only when in a server) */}
       {hasCurrentServer && (
         <button
@@ -108,19 +82,6 @@ export default function MobileNavBar({
         <span>Ayarlar</span>
       </button>
 
-      {/* Fullscreen Toggle */}
-      <button
-        className={`mobile-nav-item ${isFullscreen ? "active" : ""}`}
-        onClick={toggleFullscreen}
-        title={isFullscreen ? "Tam Ekrandan Çık" : "Tam Ekran Yap"}
-      >
-        {isFullscreen ? (
-          <Minimize className="mobile-nav-icon text-indigo-400" />
-        ) : (
-          <Maximize className="mobile-nav-icon" />
-        )}
-        <span>{isFullscreen ? "Küçült" : "Tam Ekran"}</span>
-      </button>
     </nav>
   );
 }

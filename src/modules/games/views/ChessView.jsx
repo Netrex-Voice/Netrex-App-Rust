@@ -11,6 +11,7 @@ import { CATEGORY_LABEL, categoryOf, expectedScore, leagueOf, START_RATINGS } fr
 import { think } from "../engines/chess/botClient";
 import Board, { BOARD_THEMES, Piece } from "../chess/Board";
 import { beep } from "../ui";
+import { useShallow } from "zustand/react/shallow";
 
 const GREEN = "#81b64c";
 const card = "rounded-2xl border border-white/10 bg-[#1b1d22]/90";
@@ -78,7 +79,9 @@ function RatingCard({ cat, data, active, onPick }) {
 }
 
 function Lobby() {
-  const { ratings, prefs, history, beaten, setPref, start, resetAll } = useChessStore();
+  const { ratings, prefs, history, beaten, setPref, start, resetAll } = useChessStore(
+    useShallow((s) => ({ ratings: s.ratings, prefs: s.prefs, history: s.history, beaten: s.beaten, setPref: s.setPref, start: s.start, resetAll: s.resetAll })),
+  );
   const tc = TIME_CONTROLS.find((t) => t.id === prefs.tc) || null;
   const unlimited = prefs.tc === "none";
   const cat = unlimited ? null : categoryOf(tc.min, tc.inc);

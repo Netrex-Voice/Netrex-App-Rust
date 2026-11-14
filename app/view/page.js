@@ -19,6 +19,17 @@ function ImageViewerContent() {
   const searchParams = useSearchParams();
   const imageUrl = searchParams.get('url');
 
+  if (!imageUrl) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-white/50 font-medium">
+        Geçerli bir resim URL'si belirtilmedi.
+      </div>
+    );
+  }
+  return <ImageViewerBody imageUrl={imageUrl} />;
+}
+
+function ImageViewerBody({ imageUrl }) {
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -27,13 +38,6 @@ function ImageViewerContent() {
   
   const imgRef = useRef(null);
 
-  if (!imageUrl) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-white/50 font-medium">
-        Geçerli bir resim URL'si belirtilmedi.
-      </div>
-    );
-  }
 
   const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.25, 5));
   const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.25, 0.5));

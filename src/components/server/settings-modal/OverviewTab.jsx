@@ -15,7 +15,7 @@ import { uploadServerIconToCloudinary, deleteImageFromCloudinary } from "@/src/u
  * Memoized to prevent re-renders
  */
 const OverviewTab = memo(function OverviewTab({ server, onUpdate, onDelete, isOwner, onClose }) {
-  const { currentServer } = useServerStore();
+  const currentServer = useServerStore((s) => s.currentServer);
   const liveServer = currentServer || server;
   
   const [name, setName] = useState(liveServer.name);
@@ -92,7 +92,7 @@ const OverviewTab = memo(function OverviewTab({ server, onUpdate, onDelete, isOw
     if (iconType === "image" && selectedImage) {
       try {
         setIsUploadingIcon(true);
-        newIconUrl = await uploadServerIconToCloudinary(selectedImage);
+        newIconUrl = await uploadServerIconToCloudinary(selectedImage, liveServer?.id);
         setIsUploadingIcon(false);
       } catch (err) {
         setIsUploadingIcon(false);

@@ -5,6 +5,7 @@ import React, {
   useMemo,
   useCallback,
   useSyncExternalStore,
+  useLayoutEffect,
 } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -2335,6 +2336,21 @@ function ScreenShareStage({
   // Tam ekranda: öğe sahne kökünün (tam ekran hedefi) içine taşınır ve tüm ekranı kaplar. Yayın kapanırsa kök kalır,
   // tam ekran bozulmaz; yayın geri gelince bu öğe yeniden aynı yere yerleşir (kullanıcı hareketi gerekmez).
   const fullscreenHost = isFullscreen ? stageFs.root : null;
+
+  // Yayın öğesi HER ZAMAN aynı kalıcı kutunun (hostEl) içine çizilir; tam ekrana girip çıkarken yalnızca bu kutu
+  // DOM'da taşınır. Eskiden öğe portal ile satır içi arasında değiştiriliyordu: React tüm alt ağacı (video dahil)
+  // söküp yeniden kuruyor, yeni <video> bir sonraki kare gelene kadar boş kalıyor ve geçişte yayın gri görünüyordu.
+  const slotRef = useRef(null);
+  const [hostEl] = useState(() => (typeof document !== "undefined" ? document.createElement("div") : null));
+  useLayoutEffect(() => {
+    if (!hostEl) return;
+    // Konum sınıfı tek yerden gelir (relative/absolute birlikte yazılınca tam ekran katmanı bozuluyordu)
+    hostEl.className = fullscreenHost ? "absolute inset-0 z-[60]" : "relative h-full w-full";
+    const target = fullscreenHost || slotRef.current;
+    if (target && hostEl.parentNode !== target) target.appendChild(hostEl);
+  }, [hostEl, fullscreenHost]);
+  useLayoutEffect(() => () => { hostEl?.remove(); }, [hostEl]);
+
   const stageBody = (
     <div
       ref={containerRef}
@@ -2343,9 +2359,7 @@ function ScreenShareStage({
       onContextMenu={onContextMenuProp}
       // DİKKAT: konum sınıfı (relative/absolute) tek yerden gelmeli. İkisi birlikte yazılınca Tailwind'de "relative"
       // kazanıp tam ekranda sahneyi üst katman yapmıyor, yan yana duran bir kutuya çeviriyordu (arayüz yamuluyordu).
-      className={`flex flex-col bg-gradient-to-br from-[#1a1b1f] via-[#141518] to-[#0e0f12] overflow-hidden ${
-        fullscreenHost ? "absolute inset-0 z-[60]" : "relative h-full w-full"
-      }`}
+      className="relative h-full w-full flex flex-col bg-gradient-to-br from-[#1a1b1f] via-[#141518] to-[#0e0f12] overflow-hidden"
     >
       {/* Ambient background orbs - only in non-compact mode */}
       {!compact && !disableBackgroundEffects && (
@@ -2429,7 +2443,12 @@ function ScreenShareStage({
       </div>
     </div>
   );
-  return fullscreenHost ? createPortal(stageBody, fullscreenHost) : stageBody;
+  return (
+    <>
+      <div ref={slotRef} className="h-full w-full" />
+      {hostEl && createPortal(stageBody, hostEl)}
+    </>
+  );
 }
 
 export default StageManager;

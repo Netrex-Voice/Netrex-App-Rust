@@ -22,6 +22,7 @@ import { Crown, User, Mic, VolumeX } from "lucide-react";
 import Avatar from "@/src/components/ui/Avatar";
 import { toast } from "sonner";
 import RolesList from "./context/RolesList";
+import { useShallow } from "zustand/react/shallow";
 
 export default function MemberContextMenu({
   x,
@@ -30,15 +31,10 @@ export default function MemberContextMenu({
   onClose,
 }) {
   const menuRef = useRef(null);
-  const { 
-    roles, 
-    currentServer, 
-    members, 
-    assignRoleToMember, 
-    removeRoleFromMember,
-    setMemberRoles 
-  } = useServerStore();
-  const { user } = useAuthStore();
+  const { roles, currentServer, members, assignRoleToMember, removeRoleFromMember, setMemberRoles } = useServerStore(
+    useShallow((s) => ({ roles: s.roles, currentServer: s.currentServer, members: s.members, assignRoleToMember: s.assignRoleToMember, removeRoleFromMember: s.removeRoleFromMember, setMemberRoles: s.setMemberRoles })),
+  );
+  const user = useAuthStore((s) => s.user);
   const ttsEnabled = useSettingsStore(state => state.ttsEnabled);
   const mutedTtsUsers = useSettingsStore(state => state.mutedTtsUsers);
   const toggleMutedTtsUser = useSettingsStore(state => state.toggleMutedTtsUser);

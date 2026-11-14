@@ -6,6 +6,7 @@ import { useWatchPartyStore } from '@/src/store/watchPartyStore';
 import { useSettingsStore } from '@/src/store/settingsStore';
 import { useChatStore } from '@/src/store/chatStore';
 import { Music, Play, Pause } from 'lucide-react';
+import { useShallow } from "zustand/react/shallow";
 
 export function WatchPartyMiniBadge() {
   const isActive     = useWatchPartyStore((s) => s.isActive);
@@ -15,7 +16,9 @@ export function WatchPartyMiniBadge() {
   const isPlaying    = useWatchPartyStore((s) => s.playbackState.isPlaying);
 
   const controlBarHidden = useSettingsStore((s) => s.controlBarHidden);
-  const { showChatPanel, chatPosition, chatWidth } = useChatStore();
+  const { showChatPanel, chatPosition, chatWidth } = useChatStore(
+    useShallow((s) => ({ showChatPanel: s.showChatPanel, chatPosition: s.chatPosition, chatWidth: s.chatWidth })),
+  );
 
   if (typeof window === "undefined") return null;
 

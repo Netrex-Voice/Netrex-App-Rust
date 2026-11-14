@@ -20,28 +20,16 @@ import ChatInput from "./ChatInput";
 import ImageOverlay from "./ImageOverlay";
 import SecurityModal from "./SecurityModal";
 import MessageContextMenu from "./MessageContextMenu";
+import { useShallow } from "zustand/react/shallow";
 // TTS utils are now handled by GlobalChatListener
 
 export default function ChatView({ channelId, username, userId }) {
-  const {
-    messages,
-    loadChannelMessages,
-    loadOlderMessages,
-    sendMessage,
-    addIncomingMessage,
-    deleteMessage,
-    editMessage,
-    deleteMessageSequence,
-    currentChannel,
-    hasMoreMessages,
-    isLoading,
-    isLoadingOlderMessages,
-    typingUsers,
-    sendTypingStatus,
-    setTypingStatus,
-    toggleReaction,
-  } = useChatStore();
-  const { currentServer, members } = useServerStore();
+  const { messages, loadChannelMessages, loadOlderMessages, sendMessage, addIncomingMessage, deleteMessage, editMessage, deleteMessageSequence, currentChannel, hasMoreMessages, isLoading, isLoadingOlderMessages, typingUsers, sendTypingStatus, setTypingStatus, toggleReaction } = useChatStore(
+    useShallow((s) => ({ messages: s.messages, loadChannelMessages: s.loadChannelMessages, loadOlderMessages: s.loadOlderMessages, sendMessage: s.sendMessage, addIncomingMessage: s.addIncomingMessage, deleteMessage: s.deleteMessage, editMessage: s.editMessage, deleteMessageSequence: s.deleteMessageSequence, currentChannel: s.currentChannel, hasMoreMessages: s.hasMoreMessages, isLoading: s.isLoading, isLoadingOlderMessages: s.isLoadingOlderMessages, typingUsers: s.typingUsers, sendTypingStatus: s.sendTypingStatus, setTypingStatus: s.setTypingStatus, toggleReaction: s.toggleReaction })),
+  );
+  const { currentServer, members } = useServerStore(
+    useShallow((s) => ({ currentServer: s.currentServer, members: s.members })),
+  );
   const currentUser = useAuthStore((s) => s.user);
   // ✅ CPU OPT: O(n) find → O(1) Map lookup her mesaj render'ında
   const memberMap = useMemo(() => new Map((members || []).map(m => [m.id, m])), [members]);
@@ -251,7 +239,8 @@ export default function ChatView({ channelId, username, userId }) {
       const decoder = new TextDecoder();
       const data = JSON.parse(decoder.decode(payload));
       if (data.type === "chat" && data.channelId === channelId) {
-        if (data.message.userId !== userId) {
+        // Gönderen, LiveKit'in doğruladığı katılımcıyla aynı olmalı (başkası adına mesaj gösterilmez)
+        if (data.message.userId !== userId && participant && data.message.userId === participant.identity) {
           addIncomingMessage(data.message);
         }
         // TTS artık GlobalChatListener tarafından yönetiliyor (tüm kanallar için)

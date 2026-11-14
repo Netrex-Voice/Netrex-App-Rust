@@ -2,38 +2,39 @@ import { create } from "zustand";
 import {
   collection,
   query,
-  where,
   getDocs,
-  addDoc,
   doc,
   getDoc,
   deleteDoc,
   serverTimestamp,
   orderBy,
-  onSnapshot,
   limit,
   startAfter,
   setDoc,
   updateDoc,
+  FieldPath,
 } from "firebase/firestore";
 import { db } from "@/src/lib/firebase";
 import { deleteImageFromCloudinary } from "@/src/utils/imageUpload";
+import { registerCleanupTask } from "@/src/utils/cleanup";
+import { useServerStore } from "@/src/store/serverStore";
+import { createBatcher, expandMessageDocs, mergeMessages, FLUSH_DELAY_MS } from "@/src/store/chatBatch";
 import {
-  MAX_TEXT_CHANNELS_PER_USER,
   MESSAGE_MAX_LENGTH,
-  MESSAGE_COOLDOWN_MS,
   MESSAGE_SPAM_THRESHOLD_MS,
   MESSAGE_SPAM_COOLDOWN_MS,
-  CHANNEL_CREATION_COOLDOWN_MS,
   MESSAGE_PAGE_SIZE,
   MAX_STORED_MESSAGES,
   MESSAGE_SEQUENCE_THRESHOLD,
 } from "@/src/constants/appConfig";
 
-let textChannelsUnsubscribe = null;
+// ── Sunucu kanalı sohbeti ────────────────────────────────────────────────
+// Canlı iletim: LiveKit veri kanalı (odadakilere anında, ücretsiz).
+// Kalıcı kayıt: Firestore'a TOPLU yazılır (bkz. chatBatch.js): bir yazarın ~20 sn içindeki mesajları tek belge = tek yazma.
+// Firestore'da canlı dinleyici YOKTUR (okuma kotası); kanal açılınca son sayfa bir kez okunur.
+
 let lastMessageSentAt = 0;
 let spamCooldownUntil = 0; // Spam koruması aktifse bu zamana kadar mesaj gönderilemez
-let lastChannelCreationAt = 0;
 const messagePaginationCursors = new Map();
 
 // randomUUID yalnızca secure context'te var; yoksa eski yönteme düş
@@ -41,6 +42,42 @@ const generateMessageId = () =>
   typeof crypto !== "undefined" && crypto.randomUUID
     ? crypto.randomUUID()
     : Date.now().toString() + Math.random().toString(36).substr(2, 9);
+
+const messagesCol = (serverId, channelId) =>
+  collection(db, "servers", serverId, "channels", channelId, "messages");
+
+const batcher = createBatcher({
+  write: ({ serverId, channelId, docId, data }) =>
+    setDoc(doc(messagesCol(serverId, channelId), docId), { ...data, createdAt: serverTimestamp() }),
+});
+
+// Uygulama kapanırken / sekme kapanırken bekleyen mesajları yaz
+if (typeof window !== "undefined") {
+  registerCleanupTask(() => batcher.flushAll());
+  window.addEventListener("pagehide", () => { batcher.flushAll(); });
+}
+
+/** Bekleyen (henüz Firestore'a yazılmamış) mesajları hemen yazar. Çıkış yapmadan önce çağrılır. */
+export const flushPendingChatMessages = () => batcher.flushAll();
+
+// Son dakikalarda canlı gelen/giden mesajlar: kanal değiştirip geri dönünce, henüz Firestore'a yazılmamış (toplu
+// yazma bekleyen) mesajlar listeden kaybolmasın diye kanal yüklenirken bunlarla birleştirilir.
+const RECENT_LIVE_TTL_MS = FLUSH_DELAY_MS + 40_000;
+const recentLive = new Map(); // channelId -> mesajlar
+function rememberLive(channelId, message) {
+  const now = Date.now();
+  const list = (recentLive.get(channelId) || []).filter((m) => now - m.timestamp < RECENT_LIVE_TTL_MS && m.id !== message.id);
+  list.push(message);
+  recentLive.set(channelId, list);
+}
+function recentLiveFor(channelId) {
+  const now = Date.now();
+  return (recentLive.get(channelId) || []).filter((m) => now - m.timestamp < RECENT_LIVE_TTL_MS);
+}
+function forgetLive(channelId, messageIds) {
+  const list = recentLive.get(channelId);
+  if (list) recentLive.set(channelId, list.filter((m) => !messageIds.includes(m.id)));
+}
 
 // Typing göstergesi zaman aşımı: `${channelId}:${userId}` -> timeout id
 const TYPING_TTL_MS = 6000;
@@ -55,8 +92,27 @@ const clearTypingTimers = (channelId) => {
   }
 };
 
+const capMessages = (messages) =>
+  messages.length > MAX_STORED_MESSAGES ? messages.slice(-MAX_STORED_MESSAGES) : messages;
+
+const numericTs = (m) => (m.timestamp?.toDate ? m.timestamp.toDate().getTime() : m.timestamp);
+
+/**
+ * Toplu belgedeki mesajları değiştirir (oku → değiştir → yaz). `mutate(items)` yeni dizi döner; boş dönerse belge silinir.
+ * Belge henüz yazılmamışsa (başkasının bekleyen toplu yazması) `false` döner.
+ */
+async function rewriteChunk(serverId, channelId, docId, mutate) {
+  const ref = doc(messagesCol(serverId, channelId), docId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return false;
+  const items = Array.isArray(snap.data().items) ? snap.data().items : [];
+  const next = mutate(items);
+  if (next.length === 0) await deleteDoc(ref);
+  else await updateDoc(ref, { items: next });
+  return true;
+}
+
 export const useChatStore = create((set, get) => ({
-  textChannels: [],
   currentChannel: null,
   messages: [],
   isLoading: false,
@@ -70,211 +126,48 @@ export const useChatStore = create((set, get) => ({
   setShowChatPanel: (show) => set({ showChatPanel: show }),
   toggleChatPanel: () => set((state) => ({ showChatPanel: !state.showChatPanel })),
 
-  // YENİ: Sohbet konumu ve genişliği
+  // Sohbet konumu ve genişliği
   chatPosition: "right", // "left" | "right"
   chatWidth: 340,
   setChatPosition: (pos) => set({ chatPosition: pos }),
   setChatWidth: (width) => set({ chatWidth: width }),
 
-  // YENİ: Okunmamış Mesaj Sayıları { channelId: sayi }
+  // Okunmamış Mesaj Sayıları { channelId: sayi }
   unreadCounts: {},
 
-  startTextChannelListener: () => {
-    if (textChannelsUnsubscribe) {
-      textChannelsUnsubscribe();
-    }
-
-    const channelsQuery = query(
-      collection(db, "text_channels"),
-      orderBy("createdAt", "desc")
-    );
-
-    textChannelsUnsubscribe = onSnapshot(
-      channelsQuery,
-      (snapshot) => {
-        const channels = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        set({ textChannels: channels, isLoading: false, error: null });
-      },
-      (error) => {
-        console.error("Text channel listener error:", error);
-        set({ error: error.message, isLoading: false });
-      }
-    );
-
-    return () => {
-      if (textChannelsUnsubscribe) {
-        textChannelsUnsubscribe();
-        textChannelsUnsubscribe = null;
-      }
-    };
-  },
-
-  stopTextChannelListener: () => {
-    if (textChannelsUnsubscribe) {
-      textChannelsUnsubscribe();
-      textChannelsUnsubscribe = null;
-    }
-  },
-
-  // Yeni kanal oluştur
-  createTextChannel: async (name, userId) => {
-    if (!userId) {
-      return { success: false, error: "Kullanıcı doğrulanamadı." };
-    }
-
-    const normalizedName = name
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-z0-9-_]/g, "");
-
-    if (normalizedName.length < 3 || normalizedName.length > 30) {
-      return {
-        success: false,
-        error: "Kanal adı 3-30 karakter arasında olmalıdır.",
-      };
-    }
-
-    if (Date.now() - lastChannelCreationAt < CHANNEL_CREATION_COOLDOWN_MS) {
-      return {
-        success: false,
-        error: "Lütfen yeni bir kanal oluşturmadan önce birkaç saniye bekleyin.",
-      };
-    }
-
-    set({ isLoading: true, error: null });
-    try {
-      const q = query(
-        collection(db, "text_channels"),
-        where("createdBy", "==", userId)
-      );
-      const snapshot = await getDocs(q);
-
-      if (snapshot.size >= MAX_TEXT_CHANNELS_PER_USER) {
-        set({
-          error: "Maksimum 3 metin kanalı oluşturabilirsiniz.",
-          isLoading: false,
-        });
-        return {
-          success: false,
-          error: "Maksimum 3 metin kanalı oluşturabilirsiniz.",
-        };
-      }
-
-      const newChannel = {
-        name: normalizedName,
-        createdBy: userId,
-        createdAt: serverTimestamp(),
-      };
-
-      const docRef = await addDoc(collection(db, "text_channels"), newChannel);
-
-      set({ isLoading: false });
-      lastChannelCreationAt = Date.now();
-      return { success: true, channelId: docRef.id };
-    } catch (error) {
-      console.error("Error creating text channel:", error);
-      set({ error: error.message, isLoading: false });
-      return { success: false, error: error.message };
-    }
-  },
-
-  // Kanal silme
-  deleteTextChannel: async (channelId) => {
-    set({ isLoading: true, error: null });
-    try {
-      const channelRef = doc(db, "text_channels", channelId);
-      console.log("🗑️ Text channel Firebase'den siliniyor:", channelId);
-      await deleteDoc(channelRef);
-      console.log("✅ Text channel Firebase'den silindi:", channelId);
-
-      const updatedChannels = get().textChannels.filter(
-        (c) => c.id !== channelId
-      );
-
-      const currentCh = get().currentChannel;
-      if (currentCh && currentCh.id === channelId) {
-        set({ currentChannel: null, messages: [] });
-      }
-
-      set({ textChannels: updatedChannels, isLoading: false });
-      return { success: true };
-    } catch (error) {
-      console.error("❌ Text channel silme hatası:", error);
-      set({ error: error.message, isLoading: false });
-      return { success: false, error: error.message };
-    }
-  },
-
-  // Kanal mesajlarını yükle
+  // Kanal mesajlarını yükle (son sayfa; canlı dinleyici yok)
   loadChannelMessages: async (channelId, serverId = null) => {
-    // Hemen currentChannel'ı güncelle
-    const channel = get().textChannels.find(ch => ch.id === channelId);
+    const channel = useServerStore.getState().channels.find((ch) => ch.id === channelId);
     set({
-      currentChannel: channel ? { id: channelId, serverId, ...channel } : { id: channelId, serverId },
+      currentChannel: { ...(channel || {}), id: channelId, serverId },
       isLoading: true,
       error: null,
       messages: [],
       hasMoreMessages: false,
     });
-
-    // YENİ: Kanalı açtığımız için okunmamış sayısını sıfırla
     get().markAsRead(channelId);
 
+    if (!serverId) {
+      set({ error: "Kanal bir sunucuya ait değil.", isLoading: false });
+      return;
+    }
+
     try {
-      const collectionPath = serverId 
-        ? collection(db, "servers", serverId, "channels", channelId, "messages")
-        : collection(db, "text_channels", channelId, "messages");
-      
-      const channelPath = serverId
-        ? doc(db, "servers", serverId, "channels", channelId)
-        : doc(db, "text_channels", channelId);
-
-      const channelDoc = await getDoc(channelPath);
-      // Global kanallar için kontrol, server kanalları için serverStore zaten yüklüyor
-      if (!serverId && !channelDoc.exists()) {
-        set({
-          error: "Kanal bulunamadı",
-          isLoading: false,
-          currentChannel: null,
-        });
-        const updatedChannels = get().textChannels.filter(
-          (c) => c.id !== channelId
-        );
-        set({ textChannels: updatedChannels });
-        return;
-      }
-
-      const channelData = channelDoc.exists() ? channelDoc.data() : {};
-      const messagesQuery = query(
-        collectionPath,
-        orderBy("timestamp", "desc"),
-        limit(MESSAGE_PAGE_SIZE)
+      const snapshot = await getDocs(
+        query(messagesCol(serverId, channelId), orderBy("timestamp", "desc"), limit(MESSAGE_PAGE_SIZE))
       );
+      // Bu arada başka kanala geçildiyse sonucu yazma
+      if (get().currentChannel?.id !== channelId) return;
 
-      const snapshot = await getDocs(messagesQuery);
       const docs = snapshot.docs;
-      const messages = docs
-        .map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
-        .reverse();
-
-      const hasMore = docs.length === MESSAGE_PAGE_SIZE;
-      messagePaginationCursors.set(
-        channelId,
-        docs.length > 0 ? docs[docs.length - 1] : null
-      );
+      const loaded = expandMessageDocs(docs.map((d) => ({ id: d.id, data: d.data() })));
+      messagePaginationCursors.set(channelId, docs.length > 0 ? docs[docs.length - 1] : null);
 
       set({
-        messages,
-        currentChannel: { id: channelId, serverId, ...channelData },
+        // Henüz Firestore'a yazılmamış canlı mesajlar + yükleme sürerken gelenler kaybolmasın
+        messages: capMessages(mergeMessages(mergeMessages(loaded, recentLiveFor(channelId)), get().messages)),
         isLoading: false,
-        hasMoreMessages: hasMore,
+        hasMoreMessages: docs.length === MESSAGE_PAGE_SIZE,
       });
     } catch (error) {
       console.error("Error loading channel messages:", error);
@@ -284,28 +177,18 @@ export const useChatStore = create((set, get) => ({
 
   loadOlderMessages: async (channelId) => {
     const lastDoc = messagePaginationCursors.get(channelId);
-    if (!lastDoc) {
+    const serverId = get().currentChannel?.serverId;
+    if (!lastDoc || !serverId) {
       set({ hasMoreMessages: false });
       return { success: false, error: "Daha fazla mesaj yok." };
     }
 
-    const currentChannel = get().currentChannel;
-    const serverId = currentChannel?.serverId;
-
     set({ isLoadingOlderMessages: true });
+
     try {
-      const collectionPath = serverId
-        ? collection(db, "servers", serverId, "channels", channelId, "messages")
-        : collection(db, "text_channels", channelId, "messages");
-
-      const olderMessagesQuery = query(
-        collectionPath,
-        orderBy("timestamp", "desc"),
-        startAfter(lastDoc),
-        limit(MESSAGE_PAGE_SIZE)
+      const snapshot = await getDocs(
+        query(messagesCol(serverId, channelId), orderBy("timestamp", "desc"), startAfter(lastDoc), limit(MESSAGE_PAGE_SIZE))
       );
-
-      const snapshot = await getDocs(olderMessagesQuery);
       const docs = snapshot.docs;
 
       if (docs.length === 0) {
@@ -314,22 +197,13 @@ export const useChatStore = create((set, get) => ({
         return { success: true };
       }
 
-      const olderMessages = docs
-        .map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
-        .reverse();
-
-      messagePaginationCursors.set(
-        channelId,
-        docs.length > 0 ? docs[docs.length - 1] : null
-      );
+      const older = expandMessageDocs(docs.map((d) => ({ id: d.id, data: d.data() })));
+      messagePaginationCursors.set(channelId, docs[docs.length - 1]);
 
       set((state) => ({
-        messages: [...olderMessages, ...state.messages],
-        hasMoreMessages: docs.length === MESSAGE_PAGE_SIZE,
+        messages: mergeMessages(older, state.messages),
         isLoadingOlderMessages: false,
+        hasMoreMessages: docs.length === MESSAGE_PAGE_SIZE,
       }));
 
       return { success: true };
@@ -353,29 +227,27 @@ export const useChatStore = create((set, get) => ({
         error: `Mesaj en fazla ${MESSAGE_MAX_LENGTH} karakter olabilir.`,
       };
     }
+    if (!serverId) return { success: false, error: "Kanal bir sunucuya ait değil." };
 
     const now = Date.now();
     const timeSinceLastMessage = now - lastMessageSentAt;
-    
+
     // Spam koruması aktifse kontrol et
     if (now < spamCooldownUntil) {
-      const remainingTime = Math.ceil((spamCooldownUntil - now) / 1000);
       return {
         success: false,
         error: "Çok hızlı mesaj gönderiyorsunuz. Lütfen bekleyin.",
-        cooldownRemaining: remainingTime,
+        cooldownRemaining: Math.ceil((spamCooldownUntil - now) / 1000),
       };
     }
-    
+
     // Spam tespiti: Son mesajdan itibaren çok kısa sürede yeni mesaj gönderilmeye çalışılıyorsa
     if (timeSinceLastMessage < MESSAGE_SPAM_THRESHOLD_MS) {
-      // Spam korumasını aktif et
       spamCooldownUntil = now + MESSAGE_SPAM_COOLDOWN_MS;
-      const remainingTime = Math.ceil(MESSAGE_SPAM_COOLDOWN_MS / 1000);
       return {
         success: false,
         error: "Çok hızlı mesaj gönderiyorsunuz. Lütfen bekleyin.",
-        cooldownRemaining: remainingTime,
+        cooldownRemaining: Math.ceil(MESSAGE_SPAM_COOLDOWN_MS / 1000),
       };
     }
 
@@ -384,56 +256,24 @@ export const useChatStore = create((set, get) => ({
       text: cleanedText,
       userId,
       username,
-      timestamp: Date.now(),
-      ...(extraData || {})
+      timestamp: now,
+      ...(extraData || {}),
     };
 
     try {
-      // LiveKit Data Channel ile gönder
+      // Kalıcı kayıt kuyruğu: mesajın yazılacağı toplu belgenin kimliği hemen bellidir
+      message._doc = batcher.add({ serverId, channelId, message });
+      message._chunk = true;
+      lastMessageSentAt = now;
+      rememberLive(channelId, message);
+
+      set((state) => ({ messages: capMessages([...state.messages, message]) }));
+
+      // Canlı iletim: LiveKit veri kanalı
       if (room && room.localParticipant) {
-        const encoder = new TextEncoder();
-        const data = encoder.encode(
-          JSON.stringify({
-            type: "chat",
-            channelId,
-            message,
-          })
-        );
-
-        await room.localParticipant.publishData(data, {
-          topic: "chat",
-          reliable: true,
-        });
+        const data = new TextEncoder().encode(JSON.stringify({ type: "chat", channelId, message }));
+        await room.localParticipant.publishData(data, { topic: "chat", reliable: true });
       }
-
-      set((state) => {
-        const newMessages = [...state.messages, message];
-        if (newMessages.length > MAX_STORED_MESSAGES) {
-           return { messages: newMessages.slice(-MAX_STORED_MESSAGES) };
-        }
-        return { messages: newMessages };
-      });
-
-      const messageRef = doc(
-        serverId 
-          ? collection(db, "servers", serverId, "channels", channelId, "messages")
-          : collection(db, "text_channels", channelId, "messages"),
-        message.id
-      );
-
-      const finalMessage = {
-        ...message,
-        createdAt: serverTimestamp(),
-      };
-
-      // Filter out undefined values to prevent Firestore errors
-      const cleanMessage = Object.fromEntries(
-        Object.entries(finalMessage).filter(([_, v]) => v !== undefined)
-      );
-
-      await setDoc(messageRef, cleanMessage);
-
-      lastMessageSentAt = Date.now();
 
       return { success: true };
     } catch (error) {
@@ -442,23 +282,24 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  // Gelen Mesajı Ekle
+  // Gelen mesajı (LiveKit) açık kanalın listesine ekle
   addIncomingMessage: (message) => {
     set((state) => {
-      const exists = state.messages.some((m) => m.id === message.id);
-      if (exists) return state;
-      const newMessages = [...state.messages, message];
-      if (newMessages.length > MAX_STORED_MESSAGES) {
-         return { messages: newMessages.slice(-MAX_STORED_MESSAGES) };
-      }
-      return { messages: newMessages };
+      if (state.messages.some((m) => m.id === message.id)) return state;
+      return { messages: capMessages([...state.messages, message]) };
     });
   },
 
-  // YENİ: Okunmamış Sayısını Artır
+  // Canlı gelen her mesaj (açık kanal olsun olmasın) kısa süre hatırlanır: bkz. recentLive
+  rememberLiveMessage: (channelId, message) => {
+    if (channelId && message?.id) rememberLive(channelId, message);
+  },
+
+  // Okunmamış Sayısını Artır
   incrementUnread: (channelId) => {
     const current = get().currentChannel;
     const isPanelOpen = get().showChatPanel;
+
     // Eğer şu an o kanal açıksa VE panel görünüyorsa artırma
     if (current && current.id === channelId && isPanelOpen) return;
 
@@ -470,38 +311,50 @@ export const useChatStore = create((set, get) => ({
     }));
   },
 
-  // YENİ: Okundu İşaretle
+  // Okundu İşaretle
   markAsRead: (channelId) => {
     set((state) => {
+      if (!(channelId in state.unreadCounts)) return state;
       const newCounts = { ...state.unreadCounts };
       delete newCounts[channelId];
       return { unreadCounts: newCounts };
     });
   },
 
+  /** Verilen mesajları (aynı kanalda) hem listeden hem Firestore'dan siler. */
+  _deleteMessages: async (channelId, targets) => {
+    const serverId = get().currentChannel?.serverId;
+    const ids = targets.map((m) => m.id);
+    set((state) => ({ messages: state.messages.filter((m) => !ids.includes(m.id)) }));
+    forgetLive(channelId, ids);
+    if (!serverId) return;
+
+    targets.forEach((m) => {
+      if (m.imageUrl) deleteImageFromCloudinary(m.imageUrl).catch(() => {});
+    });
+
+    // Toplu belgeler: belge başına tek yazma. Eski tek-mesaj belgeleri: doğrudan silinir.
+    const byChunk = new Map();
+    const tasks = [];
+    for (const m of targets) {
+      if (batcher.removePending(serverId, channelId, m.id)) continue; // henüz yazılmamıştı
+      if (m._chunk && m._doc) {
+        byChunk.set(m._doc, [...(byChunk.get(m._doc) || []), m.id]);
+      } else {
+        tasks.push(deleteDoc(doc(messagesCol(serverId, channelId), m._doc || m.id)));
+      }
+    }
+    byChunk.forEach((messageIds, docId) => {
+      tasks.push(rewriteChunk(serverId, channelId, docId, (items) => items.filter((i) => !messageIds.includes(i.id))));
+    });
+    await Promise.all(tasks);
+  },
+
   deleteMessage: async (channelId, messageId) => {
     try {
-      const currentChannel = get().currentChannel;
-      const serverId = currentChannel?.serverId;
-      const currentMessages = get().messages;
-      
-      const targetMessage = currentMessages.find((m) => m.id === messageId);
-      if (targetMessage?.imageUrl) {
-        deleteImageFromCloudinary(targetMessage.imageUrl).catch(err => 
-            console.error("Resim silinirken hata:", err)
-        );
-      }
-
-      const updatedMessages = currentMessages.filter((m) => m.id !== messageId);
-      set({ messages: updatedMessages });
-
-      const collectionPath = serverId
-        ? collection(db, "servers", serverId, "channels", channelId, "messages")
-        : collection(db, "text_channels", channelId, "messages");
-
-      const messageRef = doc(collectionPath, messageId);
-      await deleteDoc(messageRef);
-
+      const target = get().messages.find((m) => m.id === messageId);
+      if (!target) return { success: false, error: "Mesaj bulunamadı." };
+      await get()._deleteMessages(channelId, [target]);
       return { success: true };
     } catch (error) {
       console.error("Mesaj silinemedi:", error);
@@ -519,45 +372,39 @@ export const useChatStore = create((set, get) => ({
     try {
       const currentMessages = get().messages;
       const messageIndex = currentMessages.findIndex((m) => m.id === messageId);
-      
       if (messageIndex === -1) return { success: false, error: "Mesaj bulunamadı." };
-      
+
       const targetMessage = currentMessages[messageIndex];
-      
-      // Güvenlik: Sadece kendi mesajını düzenleyebilir
+
+      // Sadece kendi mesajını düzenleyebilir (kurallar da bunu zorlar)
       if (targetMessage.userId !== userId) {
         return { success: false, error: "Sadece kendi mesajınızı düzenleyebilirsiniz." };
       }
 
       // Zaman kısıtlaması: 5 dakika
-      const msgTs = targetMessage.timestamp?.toDate ? targetMessage.timestamp.toDate().getTime() : targetMessage.timestamp;
-      if (Date.now() - msgTs > MESSAGE_SEQUENCE_THRESHOLD) {
+      if (Date.now() - numericTs(targetMessage) > MESSAGE_SEQUENCE_THRESHOLD) {
         return { success: false, error: "Mesajı düzenleme süresi doldu (5 dakika)." };
       }
 
-      // Local update
+      const patch = { text: cleanedText, edited: true, editedAt: Date.now() };
       const updatedMessages = [...currentMessages];
-      updatedMessages[messageIndex] = {
-        ...targetMessage,
-        text: cleanedText,
-        edited: true,
-        editedAt: Date.now()
-      };
+      updatedMessages[messageIndex] = { ...targetMessage, ...patch };
       set({ messages: updatedMessages });
 
-      // Firestore update
-      const currentChannel = get().currentChannel;
-      const serverId = currentChannel?.serverId;
-      const collectionPath = serverId
-        ? collection(db, "servers", serverId, "channels", channelId, "messages")
-        : collection(db, "text_channels", channelId, "messages");
+      const serverId = get().currentChannel?.serverId;
+      if (!serverId) return { success: true };
 
-      const messageRef = doc(collectionPath, messageId);
-      await updateDoc(messageRef, {
-        text: cleanedText,
-        edited: true,
-        editedAt: serverTimestamp()
-      });
+      if (batcher.editPending(serverId, channelId, messageId, patch)) return { success: true }; // henüz yazılmamıştı
+      if (targetMessage._chunk && targetMessage._doc) {
+        await rewriteChunk(serverId, channelId, targetMessage._doc, (items) =>
+          items.map((i) => (i.id === messageId ? { ...i, ...patch } : i)));
+      } else {
+        await updateDoc(doc(messagesCol(serverId, channelId), targetMessage._doc || messageId), {
+          text: cleanedText,
+          edited: true,
+          editedAt: serverTimestamp(),
+        });
+      }
 
       return { success: true };
     } catch (error) {
@@ -566,86 +413,25 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  // Sequence mesajlarını toplu silme
+  // Sequence mesajlarını toplu silme: aynı kullanıcının ardışık (5 dk içindeki) mesajları
   deleteMessageSequence: async (channelId, messageId) => {
     try {
       const currentMessages = get().messages;
-      const targetMessage = currentMessages.find((m) => m.id === messageId);
-      if (!targetMessage) {
-        return { success: false, error: "Mesaj bulunamadı." };
-      }
+      const startIndex = currentMessages.findIndex((m) => m.id === messageId);
+      if (startIndex === -1) return { success: false, error: "Mesaj bulunamadı." };
+      const targetMessage = currentMessages[startIndex];
+      const inSequence = (msg) =>
+        msg.userId === targetMessage.userId &&
+        Math.abs(numericTs(msg) - numericTs(targetMessage)) < MESSAGE_SEQUENCE_THRESHOLD;
 
-      // Sequence'ı bul: Aynı kullanıcının ardışık mesajları
       const sequenceMessages = [];
-      let startIndex = -1;
-
-      // Mesajın index'ini bul
-      for (let i = 0; i < currentMessages.length; i++) {
-        if (currentMessages[i].id === messageId) {
-          startIndex = i;
-          break;
-        }
+      for (let i = startIndex; i >= 0 && inSequence(currentMessages[i]); i--) sequenceMessages.unshift(currentMessages[i]);
+      for (let i = startIndex + 1; i < currentMessages.length && inSequence(currentMessages[i]); i++) {
+        sequenceMessages.push(currentMessages[i]);
       }
+      if (sequenceMessages.length === 0) return { success: false, error: "Sequence bulunamadı." };
 
-      if (startIndex === -1) {
-        return { success: false, error: "Mesaj bulunamadı." };
-      }
-
-      // Geriye doğru sequence'ı bul
-      for (let i = startIndex; i >= 0; i--) {
-        const msg = currentMessages[i];
-        if (msg.userId === targetMessage.userId) {
-          const timeDiff = Math.abs(targetMessage.timestamp - msg.timestamp);
-          if (timeDiff < MESSAGE_SEQUENCE_THRESHOLD) {
-            sequenceMessages.unshift(msg);
-          } else {
-            break;
-          }
-        } else {
-          break;
-        }
-      }
-
-      // İleriye doğru sequence'ı bul
-      for (let i = startIndex + 1; i < currentMessages.length; i++) {
-        const msg = currentMessages[i];
-        if (msg.userId === targetMessage.userId) {
-          const timeDiff = Math.abs(msg.timestamp - targetMessage.timestamp);
-          if (timeDiff < MESSAGE_SEQUENCE_THRESHOLD) {
-            sequenceMessages.push(msg);
-          } else {
-            break;
-          }
-        } else {
-          break;
-        }
-      }
-
-      if (sequenceMessages.length === 0) {
-        return { success: false, error: "Sequence bulunamadı." };
-      }
-
-      // Local state'ten sil
-      const sequenceIds = sequenceMessages.map((m) => m.id);
-      const updatedMessages = currentMessages.filter(
-        (m) => !sequenceIds.includes(m.id)
-      );
-      set({ messages: updatedMessages });
-
-      // Firestore'dan sil
-      const currentChannel = get().currentChannel;
-      const serverId = currentChannel?.serverId;
-      const collectionPath = serverId
-        ? collection(db, "servers", serverId, "channels", channelId, "messages")
-        : collection(db, "text_channels", channelId, "messages");
-
-      const deletePromises = sequenceMessages.map((msg) => {
-        const messageRef = doc(collectionPath, msg.id);
-        return deleteDoc(messageRef);
-      });
-
-      await Promise.all(deletePromises);
-
+      await get()._deleteMessages(channelId, sequenceMessages);
       return { success: true, deletedCount: sequenceMessages.length };
     } catch (error) {
       console.error("Sequence mesajları silinemedi:", error);
@@ -661,29 +447,35 @@ export const useChatStore = create((set, get) => ({
 
       const targetMessage = currentMessages[messageIndex];
       const reactions = { ...(targetMessage.reactions || {}) };
-      
-      if (!reactions[emoji]) reactions[emoji] = [];
-      
-      const userIndex = reactions[emoji].indexOf(userId);
-      if (userIndex === -1) {
-        reactions[emoji].push(userId);
-      } else {
-        reactions[emoji].splice(userIndex, 1);
-        if (reactions[emoji].length === 0) delete reactions[emoji];
-      }
+      const users = [...(reactions[emoji] || [])];
+      const userIndex = users.indexOf(userId);
+      if (userIndex === -1) users.push(userId);
+      else users.splice(userIndex, 1);
+      if (users.length > 0) reactions[emoji] = users;
+      else delete reactions[emoji];
 
       const updatedMessages = [...currentMessages];
       updatedMessages[messageIndex] = { ...targetMessage, reactions };
       set({ messages: updatedMessages });
 
-      const currentChannel = get().currentChannel;
-      const serverId = currentChannel?.serverId;
-      const collectionPath = serverId
-        ? collection(db, "servers", serverId, "channels", channelId, "messages")
-        : collection(db, "text_channels", channelId, "messages");
+      const serverId = get().currentChannel?.serverId;
+      if (!serverId) return { success: true };
 
-      const messageRef = doc(collectionPath, messageId);
-      await updateDoc(messageRef, { reactions });
+      // Kendi mesajım henüz yazılmadıysa tepki, toplu belgeyle birlikte yazılır
+      if (batcher.setPendingReactions(serverId, channelId, messageId, reactions)) return { success: true };
+
+      const ref = doc(messagesCol(serverId, channelId), targetMessage._doc || messageId);
+      const write = () =>
+        targetMessage._chunk
+          ? updateDoc(ref, new FieldPath("reactions", messageId), reactions)
+          : updateDoc(ref, { reactions });
+      try {
+        await write();
+      } catch (error) {
+        if (error?.code !== "not-found") throw error;
+        // Mesaj başkasının henüz yazılmamış toplu belgesinde: yazıldıktan sonra bir kez daha dene
+        setTimeout(() => write().catch(() => {}), FLUSH_DELAY_MS + 5000);
+      }
 
       return { success: true };
     } catch (error) {
@@ -743,23 +535,15 @@ export const useChatStore = create((set, get) => ({
     if (!room || !room.localParticipant) return;
 
     try {
-      const encoder = new TextEncoder();
-      const data = encoder.encode(
-        JSON.stringify({
-          type: "typing",
-          channelId,
-          userId,
-          username,
-          isTyping,
-        })
+      const data = new TextEncoder().encode(
+        JSON.stringify({ type: "typing", channelId, userId, username, isTyping })
       );
-
       await room.localParticipant.publishData(data, {
         topic: "typing",
         reliable: false, // Typing is low priority
       });
     } catch (error) {
-       // Silent error for typing
+      // Silent error for typing
     }
   },
 }));

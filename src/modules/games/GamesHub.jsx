@@ -16,6 +16,7 @@ import Appearance from "./Appearance";
 import Cover from "./covers";
 import Profile from "./Profile";
 import SoloRoom from "./SoloRoom";
+import { useShallow } from "zustand/react/shallow";
 
 const ICONS = { Zap, Dumbbell, MessageCircleQuestion, LayoutGrid, Circle, Building2, Crown, Mountain };
 const GameIcon = ({ g, size = 20 }) => {
@@ -616,7 +617,9 @@ function useMyId() {
 
 // ───────────────────────────── Kabuk ─────────────────────────────
 export default function GamesHub() {
-  const { screen, detailId, session, go } = useGamesStore();
+  const { screen, detailId, session, go } = useGamesStore(
+    useShallow((s) => ({ screen: s.screen, detailId: s.detailId, session: s.session, go: s.go })),
+  );
   const setOpen = useGamesStore((s) => s.setOpen);
   const myId = useMyId();
   const [showLook, setShowLook] = useState(false);

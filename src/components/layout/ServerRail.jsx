@@ -9,6 +9,7 @@ import { toast } from "@/src/utils/toast";
 import { Home, Plus, MessageCircle, Gamepad2 } from "lucide-react";
 import { useSettingsStore } from "@/src/store/settingsStore";
 import { useGamesStore } from "@/src/modules/games/store";
+import { useShallow } from "zustand/react/shallow";
 // Tek kişilik oyun paneli yalnızca açılınca yüklenir (oyunlar kapalıyken hiçbir kod gelmez)
 const SoloArcade = lazy(() => import("@/src/modules/games/SoloArcade"));
 import RailUserPanel from "./RailUserPanel";
@@ -25,16 +26,14 @@ import { RailItem, RailSeparator } from "./server-rail";
  * - Clean and maintainable
  */
 export default function ServerRail({ onOpenCreateModal, isRoomActive, friendsMode, onToggleFriendsMode, onGoHome, onSelectDM }) {
-  const { user } = useAuthStore();
-  const { 
-    servers, 
-    currentServer, 
-    selectServer, 
-    fetchUserServers,
-    leaveServer
-  } = useServerStore();
+  const user = useAuthStore((s) => s.user);
+  const { servers, currentServer, selectServer, fetchUserServers, leaveServer } = useServerStore(
+    useShallow((s) => ({ servers: s.servers, currentServer: s.currentServer, selectServer: s.selectServer, fetchUserServers: s.fetchUserServers, leaveServer: s.leaveServer })),
+  );
 
-  const { conversations, unreadDMCounts, selectConversation } = useDMStore();
+  const { conversations, unreadDMCounts, selectConversation } = useDMStore(
+    useShallow((s) => ({ conversations: s.conversations, unreadDMCounts: s.unreadDMCounts, selectConversation: s.selectConversation })),
+  );
   const gamesEnabled = useSettingsStore((s) => s.gamesEnabled);
   const arcadeOpen = useGamesStore((s) => s.arcadeOpen);
   const setArcadeOpen = useGamesStore((s) => s.setArcadeOpen);

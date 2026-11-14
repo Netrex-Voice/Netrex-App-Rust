@@ -27,6 +27,7 @@ import CustomStatusCard from "./profile/CustomStatusCard";
 import ProfileBio from "./profile/ProfileBio";
 import RolesSection from "./profile/RolesSection";
 import ProfileDates from "./profile/ProfileDates";
+import { useShallow } from "zustand/react/shallow";
 
 const BADGES = {
   owner: {
@@ -46,8 +47,10 @@ const activeListeners = new Map();
 export default function UserProfileModal({ member, position, onClose }) {
   const modalRef = useRef(null);
   const positionRAFRef = useRef(null);
-  const { user: currentUser } = useAuthStore();
-  const { currentServer, roles, badges: serverBadges } = useServerStore();
+  const currentUser = useAuthStore((s) => s.user);
+  const { currentServer, roles, serverBadges } = useServerStore(
+    useShallow((s) => ({ currentServer: s.currentServer, roles: s.roles, serverBadges: s.badges })),
+  );
   const openSettingsToSection = useSettingsStore(state => state.openSettingsToSection);
   const [userProfile, setUserProfile] = useState(null);
   const [modalPosition, setModalPosition] = useState(position || { x: 0, y: 0 });

@@ -3,6 +3,7 @@
 import { memo, useMemo, useState } from "react";
 import { prefetchJoin } from "@/src/lib/joinPrefetch";
 import { useAuthStore } from "@/src/store/authStore";
+import { useServerStore } from "@/src/store/serverStore";
 import { clickable } from "@/src/utils/a11y";
 import { VOICE_GROUPS, DEFAULT_GROUP_ID } from "@/src/store/voiceGroupStore";
 import { Volume2, Signal, Lock } from "lucide-react";
@@ -37,7 +38,9 @@ const VoiceChannelItem = memo(function VoiceChannelItem({
   const authUser = useAuthStore((st) => st.user);
   const warmJoin = () => {
     if (isActive || !authUser?.uid) return;
-    prefetchJoin(channel.id, authUser.uid, authUser.displayName || authUser.email || "Misafir");
+    // Kanal o an açık olan sunucuya aittir (ActiveRoom'daki token isteğiyle aynı anahtar olmalı ki önbellek tutsun)
+    const serverId = useServerStore.getState().currentServer?.id || null;
+    prefetchJoin(channel.id, authUser.uid, authUser.displayName || authUser.email || "Misafir", serverId);
   };
 
   // "user": kişi bırakılabilir, "channel": kanal sırası değişecek

@@ -11,7 +11,7 @@ export default function JoinServerModal({ isOpen, onClose, onCreateClick }) {
   const [inviteCode, setInviteCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const joinServer = useServerStore((s) => s.joinServer);
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

@@ -11,7 +11,7 @@ import UserPhoto from "@/src/components/ui/UserPhoto";
 import { AvatarFallback } from "@/src/components/ui/Avatar";
 
 export default function RailUserPanel() {
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const isMuted = useSettingsStore((s) => s.isMuted);
   const isDeafened = useSettingsStore((s) => s.isDeafened);
   const toggleMute = useSettingsStore((s) => s.toggleMute);
@@ -27,7 +27,7 @@ export default function RailUserPanel() {
   )?.profileColor;
   // Firestore'daki değer varsa onu kullan, yoksa store'dakini
   const effectiveProfileColor = memberProfileColor || profileColor || "#6366f1";
-  const { status: updateStatus } = useUpdateStore();
+  const updateStatus = useUpdateStore((s) => s.status);
 
   const [showMenu, setShowMenu] = useState(false);
   const [menuPos, setMenuPos] = useState({ bottom: 20, left: 0 });

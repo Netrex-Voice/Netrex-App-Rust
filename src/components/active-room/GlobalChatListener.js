@@ -13,7 +13,7 @@ import { useServerStore } from "@/src/store/serverStore";
 // --- GLOBAL CHAT & EVENTS ---
 export default function GlobalChatListener({ showChatPanel, setShowChatPanel }) {
   const room = useRoomContext();
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const { playSound } = useSoundEffects();
 
   // ✅ Stale closure önleme: Props ve state'leri ref'lerde tut
@@ -31,14 +31,6 @@ export default function GlobalChatListener({ showChatPanel, setShowChatPanel }) 
   const lastTtsSpeakerRef = useRef(null);
   const lastTtsTimeRef = useRef(0);
 
-  // Linki harici tarayıcıda açma yardımcısı
-  const openLinkExternal = useCallback((url) => {
-    if (window.netrex?.openExternalLink) {
-      window.netrex.openExternalLink(url);
-    } else {
-      window.open(url, "_blank");
-    }
-  }, []);
 
   // Uygulamayı ön plana getirme yardımcısı
   const bringAppToFront = useCallback(() => {
@@ -87,9 +79,15 @@ export default function GlobalChatListener({ showChatPanel, setShowChatPanel }) 
         // Güncel user ID'yi al (stale closure önleme)
         const currentUserId = useAuthStore.getState().user?.uid;
         
+        // Kimlik taklidi koruması: gönderen, mesajın içindeki userId değil LiveKit'in doğruladığı katılımcıdır
+        if (data.type === "chat" && (!participant || data.message?.userId !== participant.identity)) return;
+        if (data.type === "typing" && (!participant || data.userId !== participant.identity)) return;
+
         if (data.type === "chat" && data.message.userId !== currentUserId) {
           const message = data.message;
           const channelId = data.channelId;
+          // Henüz Firestore'a yazılmamış olabilir (toplu yazma): kanal yeniden açılırsa kaybolmasın
+          useChatStore.getState().rememberLiveMessage(channelId, message);
           
           // Güncel state'leri al (stale closure önleme)
           const chatState = useChatStore.getState();
@@ -97,7 +95,7 @@ export default function GlobalChatListener({ showChatPanel, setShowChatPanel }) 
           const isShowingChat = showChatPanelRef.current;
           
           // Mesajın geldiği kanalın adını bul
-          const messageChannel = chatState.textChannels.find((ch) => ch.id === channelId);
+          const messageChannel = useServerStore.getState().channels.find((ch) => ch.id === channelId);
           const channelName = messageChannel?.name || "sohbet";
 
           // Toast bildirim göster (uygulama içindeyse VE sohbet paneli kapalıysa)
@@ -112,16 +110,9 @@ export default function GlobalChatListener({ showChatPanel, setShowChatPanel }) 
               message: message.text,
               channelName: channelName,
               avatarColor: message.profileColor,
-              onClick: () => {
-                // Eğer mesaj link içeriyorsa → harici tarayıcıda aç
-                const urlRegex = /(https?:\/\/[^\s]+)/g;
-                const urls = message.text ? message.text.match(urlRegex) : null;
-                if (urls && urls.length > 0) {
-                  openLinkExternal(urls[0]);
-                }
-                // Kanala git
-                navigateToChannel(channelId);
-              },
+              // Bildirime tıklamak yalnızca kanala götürür. Mesajdaki bağlantı onaysız AÇILMAZ (oltalama riski);
+              // kullanıcı bağlantıya sohbetin içinden, onay penceresiyle gider.
+              onClick: () => navigateToChannel(channelId),
             });
           }
 
@@ -132,7 +123,9 @@ export default function GlobalChatListener({ showChatPanel, setShowChatPanel }) 
                 const isAppInBackground =
                   typeof document !== "undefined" &&
                   (document.hidden || !document.hasFocus());
-                const shouldNotify = isAppInBackground || !isShowingChat;
+                // Yalnızca uygulama ARKA PLANDAYKEN: öndeyken uygulamanın kendi bildirimi (yukarıdaki toast) gösterilir.
+                // (WebView2 işletim sistemi bildirimlerini "tauri.localhost" adıyla gösteriyor.)
+                const shouldNotify = isAppInBackground;
 
                 if (shouldNotify) {
                   const body = message.text
@@ -157,14 +150,7 @@ export default function GlobalChatListener({ showChatPanel, setShowChatPanel }) 
                       // 1. Uygulamayı ön plana getir
                       bringAppToFront();
 
-                      // 2. Link varsa harici tarayıcıda aç
-                      const urlRegex = /(https?:\/\/[^\s]+)/g;
-                      const urls = message.text ? message.text.match(urlRegex) : null;
-                      if (urls && urls.length > 0) {
-                        openLinkExternal(urls[0]);
-                      }
-
-                      // 3. Bildirim kanalına git ve chat panelini aç
+                      // 2. Bildirim kanalına git ve chat panelini aç (mesajdaki bağlantı onaysız açılmaz)
                       navigateToChannel(channelId);
                       
                       notification.close();

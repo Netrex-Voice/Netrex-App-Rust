@@ -21,6 +21,7 @@ import {
   getDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
   serverTimestamp,
 } from "firebase/firestore";
 import { auth, db } from "@/src/lib/firebase";
@@ -136,8 +137,10 @@ export const useAuthStore = create((set) => ({
         const syncData = {
           uid: firebaseUser.uid,
           displayName,
-          email: firebaseUser.email,
         };
+        // E-posta Firestore'a YAZILMAZ: users belgelerini giriş yapmış herkes okuyabiliyor. Eski sürümlerin yazdığı
+        // kayıt burada silinir (e-posta zaten Firebase Auth'ta durur; arayüz oradan okur).
+        if (existingData && 'email' in existingData) syncData.email = deleteField();
 
         if (needsUsernameUpdate) {
           syncData.username = generatedUsername;
@@ -223,7 +226,6 @@ export const useAuthStore = create((set) => ({
               uid: result.user.uid,
               displayName: username,
               username: finalUsername,
-              email: result.user.email,
               photoURL: null, // anonim kullanıcı → başlangıçta null
               lastSeen: serverTimestamp(),
             },
@@ -255,6 +257,13 @@ export const useAuthStore = create((set) => ({
 
   logout: async () => {
     try {
+      // Henüz Firestore'a yazılmamış (toplu yazma bekleyen) sohbet mesajlarını oturum kapanmadan yaz
+      try {
+        const { flushPendingChatMessages } = require("./chatStore");
+        await flushPendingChatMessages();
+      } catch (e) {
+        console.warn("Bekleyen mesajlar yazılamadı:", e);
+      }
       try {
         const { useSettingsStore } = require("./settingsStore");
         useSettingsStore.getState().setSettingsOpen(false);

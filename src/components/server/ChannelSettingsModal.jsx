@@ -21,10 +21,13 @@ import {
   Save
 } from "lucide-react";
 import { toast } from "sonner";
+import { useShallow } from "zustand/react/shallow";
 
 export default function ChannelSettingsModal({ isOpen, onClose, channel, initialTab = "overview" }) {
-  const { roles, currentServer, updateChannel, deleteChannel, setChannelPermissions } = useServerStore();
-  const { user } = useAuthStore();
+  const { roles, currentServer, updateChannel, deleteChannel, setChannelPermissions } = useServerStore(
+    useShallow((s) => ({ roles: s.roles, currentServer: s.currentServer, updateChannel: s.updateChannel, deleteChannel: s.deleteChannel, setChannelPermissions: s.setChannelPermissions })),
+  );
+  const user = useAuthStore((s) => s.user);
   const [activeTab, setActiveTab] = useState(initialTab);
   const [channelName, setChannelName] = useState(channel?.name || "");
   const [permOverwrites, setPermOverwrites] = useState(channel?.permissionOverwrites || {});

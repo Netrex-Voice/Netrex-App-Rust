@@ -164,13 +164,14 @@ mod imp {
         }
     }
 
-    fn start_item<T>(item: T, shared: Arc<Shared>) -> Result<CaptureControl<Handler, BoxErr>, String>
+    fn start_item<T>(item: T, shared: Arc<Shared>, cursor: bool) -> Result<CaptureControl<Handler, BoxErr>, String>
     where
         T: TryInto<GraphicsCaptureItemType> + Send + 'static,
     {
         let settings = Settings::new(
             item,
-            CursorCaptureSettings::WithCursor,
+            // İmleçli yakalama bazı oyunlarda oyunun kendi imlecini gizleyebiliyor: kullanıcı kapatabilir
+            if cursor { CursorCaptureSettings::WithCursor } else { CursorCaptureSettings::WithoutCursor },
             DrawBorderSettings::WithoutBorder, // sarı çerçeve çıkmasın
             SecondaryWindowSettings::Default,
             MinimumUpdateIntervalSettings::Default,
@@ -202,6 +203,7 @@ mod imp {
         source_id: String,
         fps: Option<u32>,
         audio: Option<String>,
+        cursor: bool,
         on_audio: Channel<InvokeResponseBody>,
     ) -> Result<StartInfo, String> {
         let fps = fps.unwrap_or(30);
@@ -265,8 +267,8 @@ mod imp {
         let min_interval = Duration::from_micros(1_000_000 / u64::from(fps.clamp(1, 120)));
         let shared = Arc::new(Shared { ptr: ptr as *mut u8, capacity, stop: AtomicBool::new(false), min_interval });
         let started = match item {
-            Item::Monitor(m) => start_item(m, shared.clone()),
-            Item::Window(w) => start_item(w, shared.clone()),
+            Item::Monitor(m) => start_item(m, shared.clone(), cursor),
+            Item::Window(w) => start_item(w, shared.clone(), cursor),
         };
         match started {
             Ok(control) => {
@@ -286,7 +288,7 @@ mod imp {
                 crate::lifecycle::trace(
                     &app,
                     &format!(
-                        "capture: başladı ({source_id}, {fps} fps, ses: {})",
+                        "capture: başladı ({source_id}, {fps} fps, imleç: {cursor}, ses: {})",
                         match (&audio, has_audio, &audio_error) {
                             (None, _, _) => "yok".to_string(),
                             (Some(m), true, _) => format!("{m} (pid {audio_pid}, ağaç dahil: {audio_include_tree})"),
@@ -320,9 +322,10 @@ pub async fn start_capture(
     source_id: String,
     fps: Option<u32>,
     audio: Option<String>,
+    cursor: Option<bool>,
     on_audio: tauri::ipc::Channel<tauri::ipc::InvokeResponseBody>,
 ) -> Result<imp::StartInfo, String> {
-    imp::start(app, source_id, fps, audio, on_audio).await
+    imp::start(app, source_id, fps, audio, cursor.unwrap_or(true), on_audio).await
 }
 
 #[cfg(windows)]

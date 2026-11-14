@@ -6,10 +6,13 @@ import Button from "@/src/components/ui/Button";
 import { useServerStore } from "@/src/store/serverStore";
 import { useAuthStore } from "@/src/store/authStore";
 import { toast } from "sonner";
+import { useShallow } from "zustand/react/shallow";
 
 export default function CreateInviteModal({ isOpen, onClose, serverId }) {
-  const { fetchServerInvites, activeInvites } = useServerStore();
-  const { user } = useAuthStore();
+  const { fetchServerInvites, activeInvites } = useServerStore(
+    useShallow((s) => ({ fetchServerInvites: s.fetchServerInvites, activeInvites: s.activeInvites })),
+  );
+  const user = useAuthStore((s) => s.user);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 

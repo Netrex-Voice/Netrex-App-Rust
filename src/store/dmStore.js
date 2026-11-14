@@ -19,6 +19,7 @@ import {
   runTransaction,
 } from "firebase/firestore";
 import { db, auth } from "@/src/lib/firebase";
+import { primeAvatars } from "@/src/store/avatarStore";
 import { toast } from "@/src/utils/toast";
 import { MESSAGE_SEQUENCE_THRESHOLD } from "@/src/constants/appConfig";
 import { useFriendStore } from "./friendStore";
@@ -164,6 +165,7 @@ export const useDMStore = create((set, get) => ({
       if (docSnap.exists()) {
         const data = { uid: docSnap.id, ...docSnap.data() };
         partnerDocCache.set(userId, data);
+        primeAvatars({ [userId]: data.photoURL || null }); // avatarlar bu dinleyicinin okuduğu adresi kullansın
         queueUserUpdate(set, userId, data);
       }
     }, (error) => {

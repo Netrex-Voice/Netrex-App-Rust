@@ -7,6 +7,7 @@ import { useAuthStore } from "@/src/store/authStore";
 import { useSettingsStore } from "@/src/store/settingsStore";
 import { Settings, Trash2, Shield, Hash, Volume2, VolumeX, Mic, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+import { useShallow } from "zustand/react/shallow";
 
 export default function ChannelContextMenu({
   x,
@@ -15,8 +16,10 @@ export default function ChannelContextMenu({
   onClose,
   onOpenSettings,
 }) {
-  const { currentServer, deleteChannel, roles, members, channels, reorderChannels } = useServerStore();
-  const { user } = useAuthStore();
+  const { currentServer, deleteChannel, roles, members, channels, reorderChannels } = useServerStore(
+    useShallow((s) => ({ currentServer: s.currentServer, deleteChannel: s.deleteChannel, roles: s.roles, members: s.members, channels: s.channels, reorderChannels: s.reorderChannels })),
+  );
+  const user = useAuthStore((s) => s.user);
   const ttsEnabled = useSettingsStore(state => state.ttsEnabled);
   const mutedTtsChannels = useSettingsStore(state => state.mutedTtsChannels);
   const toggleMutedTtsChannel = useSettingsStore(state => state.toggleMutedTtsChannel);

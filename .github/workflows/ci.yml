@@ -1,0 +1,76 @@
+# Her push ve PR'da çalışır: lint, birim testleri, sunucu testleri, güvenlik kuralı testleri ve Rust testleri.
+# Hiçbir gizli (secret) kullanmaz; gerçek Firebase/LiveKit/Cloudinary'ye bağlanmaz (kurallar yerel emülatörde denenir).
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Lint, testler, güvenlik kuralları
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Üçüncü taraf action'lar commit SHA'sına sabitlenmiştir (etiket sonradan başka koda çevrilemez).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Birim testleri (sohbet toplu yazma, oyun motorları)
+        run: npm test
+
+      - name: Sunucu testleri (token, yükleme imzası, silme yetkisi)
+        working-directory: server
+        run: |
+          npm ci
+          npm test
+
+      # Firestore + Realtime Database kuralları yerel emülatörde (Java, GitHub koşucularında kuruludur)
+      - name: Güvenlik kuralı testleri
+        run: npm run test:rules
+
+  rust:
+    name: Rust testleri
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
+        with:
+          workspaces: "src-tauri -> target"
+
+      # tauri::generate_context! derleme sırasında ön yüz klasörünün (out/) var olmasını ister
+      - name: Boş ön yüz klasörü
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force out | Out-Null
+
+      - name: cargo test
+        working-directory: src-tauri
+        run: cargo test --locked

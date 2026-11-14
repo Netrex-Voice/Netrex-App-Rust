@@ -1,5 +1,6 @@
 import { createPortal } from "react-dom";
 import { X, RotateCw, Maximize, Minus, Plus, Download } from "lucide-react";
+import { toast } from "@/src/utils/toast";
 
 export default function ImageOverlay({
   selectedImage,
@@ -27,13 +28,17 @@ export default function ImageOverlay({
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `Netrex_${Date.now()}.png`;
+      const fileName = `Netrex_${Date.now()}.png`;
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+      // Masaüstü uygulamasında tarayıcının indirme çubuğu yoktur: kullanıcıya kendimiz haber veririz
+      toast.success(`Resim indirildi: ${fileName} (İndirilenler klasörü)`);
     } catch (error) {
       console.error("Download failed:", error);
+      toast.error("Resim indirilemedi.");
     }
   };
 

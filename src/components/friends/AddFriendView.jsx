@@ -11,18 +11,13 @@ import { useFriendStore } from "@/src/store/friendStore";
 import { useAuthStore } from "@/src/store/authStore";
 import FriendItem from "./FriendItem";
 import { SectionCard, EmptyState } from "./FriendsUI";
+import { useShallow } from "zustand/react/shallow";
 
 export default function AddFriendView() {
   const user = useAuthStore((s) => s.user);
-  const {
-    searchResults,
-    isSearching,
-    searchUsers,
-    clearSearch,
-    sendFriendRequest,
-    incomingRequests,
-    acceptRequest,
-  } = useFriendStore();
+  const { searchResults, isSearching, searchUsers, clearSearch, sendFriendRequest, incomingRequests, acceptRequest } = useFriendStore(
+    useShallow((s) => ({ searchResults: s.searchResults, isSearching: s.isSearching, searchUsers: s.searchUsers, clearSearch: s.clearSearch, sendFriendRequest: s.sendFriendRequest, incomingRequests: s.incomingRequests, acceptRequest: s.acceptRequest })),
+  );
 
   const [searchQuery, setSearchQuery] = useState("");
   const searchTimeoutRef = useRef(null);

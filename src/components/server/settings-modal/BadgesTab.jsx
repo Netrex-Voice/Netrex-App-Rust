@@ -69,7 +69,7 @@ export default function BadgesTab({ badges, members, onCreate, onUpdate, onDelet
     try {
       let iconUrl = null;
       if (badgeIcon) {
-        iconUrl = await uploadBadgeIconToCloudinary(badgeIcon);
+        iconUrl = await uploadBadgeIconToCloudinary(badgeIcon, serverId);
       }
       
       const result = await onCreate(serverId, {
@@ -111,7 +111,7 @@ export default function BadgesTab({ badges, members, onCreate, onUpdate, onDelet
     try {
       let iconUrl = selectedBadge.iconUrl;
       if (badgeIcon) {
-        iconUrl = await uploadBadgeIconToCloudinary(badgeIcon);
+        iconUrl = await uploadBadgeIconToCloudinary(badgeIcon, serverId);
         // Delete old icon if exists
         if (selectedBadge.iconUrl) {
           deleteImageFromCloudinary(selectedBadge.iconUrl).catch(console.warn);

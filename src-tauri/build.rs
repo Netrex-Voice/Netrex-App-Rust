@@ -17,13 +17,27 @@ fn read_env_local(key: &str) -> Option<String> {
 }
 
 
-/// `.env.local` içeriğini her derlemede rastgele bir anahtarla şifreleyip exe'ye gömer (`src/envfile.rs` bellekte çözer).
+/// `.env.local` içindeki HERKESE AÇIK ayarları her derlemede rastgele bir anahtarla şifreleyip exe'ye gömer (`src/envfile.rs` bellekte çözer).
 /// Amaç: kurulum klasöründe düz metin gizli dosya bırakmamak ve `strings` ile okunamaması. Anahtar da exe içinde
 /// olduğundan bu BİR GİZLEME katmanıdır, kararlı bir tersine mühendislik karşısında koruma sağlamaz; asıl çözüm
 /// anahtarları istemciden çıkarıp token üretimini sunucuya taşımaktır.
 fn embed_env() {
     let out = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
-    let plain = fs::read(Path::new("..").join(".env.local")).unwrap_or_default();
+    // YALNIZCA herkese açık satırlar gömülür (NEXT_PUBLIC_* ve güncelleme adresi). LiveKit/Cloudinary secret'ları
+    // yerel `.env.local`'de dursa bile ikili dosyaya GİRMEZ: şifreleme yalnızca gizlemedir, anahtar da exe'nin içinde.
+    // Secret gerektiren işler Netrex sunucusunda (server/) yapılır; sunucusuz yerel kullanım için `.env.local` exe'nin
+    // yanına konabilir (bkz. src/envfile.rs).
+    let plain: Vec<u8> = fs::read_to_string(Path::new("..").join(".env.local"))
+        .unwrap_or_default()
+        .lines()
+        .filter(|line| {
+            let key = line.trim().trim_start_matches("export ").split('=').next().unwrap_or("").trim();
+            key.starts_with("NEXT_PUBLIC_") || key == "NETREX_UPDATE_URL"
+        })
+        .collect::<Vec<_>>()
+        .join("
+")
+        .into_bytes();
     let (blob, mask, share) = if plain.is_empty() {
         (Vec::new(), [0u8; 32], [0u8; 32])
     } else {

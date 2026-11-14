@@ -6,6 +6,36 @@ import { Mic, MicOff, VolumeX, Headphones, ShieldAlert } from "lucide-react";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/src/lib/firebase";
 import { toast } from "@/src/utils/toast";
+import { useServerStore } from "@/src/store/serverStore";
+import { issuerHasPermission } from "@/src/utils/voiceCommands";
+
+// Komut türü → gönderenin sahip olması gereken sunucu izni
+const COMMAND_PERMISSION = {
+  MUTE: "MUTE_MEMBERS",
+  DEAFEN: "DEAFEN_MEMBERS",
+  VOICE_KICK: "KICK_VOICE_MEMBERS",
+};
+
+// Gönderen bu izne sahip mi? Önce bellekteki sunucu verisine bakılır (okuma yok); oda başka bir sunucudaysa
+// Firestore'dan doğrulanır. Sonuç kısa süre önbellekte tutulur.
+const senderPermCache = new Map(); // "sunucu|uid|izin" -> { ok, at }
+async function senderHasPermission(serverId, senderId, permission) {
+  if (!serverId || !senderId || !permission) return false;
+  const key = `${serverId}|${senderId}|${permission}`;
+  const hit = senderPermCache.get(key);
+  if (hit && Date.now() - hit.at < 30_000) return hit.ok;
+  let ok;
+  const s = useServerStore.getState();
+  if (s.currentServer?.id === serverId && s.members.length > 0 && s.roles.length > 0) {
+    const roleIds = s.members.find((m) => (m.id || m.userId) === senderId)?.roles || [];
+    ok = s.currentServer.ownerId === senderId
+      || s.roles.some((r) => roleIds.includes(r.id) && (r.permissions || []).includes(permission));
+  } else {
+    ok = await issuerHasPermission(serverId, senderId, permission);
+  }
+  senderPermCache.set(key, { ok, at: Date.now() });
+  return ok;
+}
 
 // Moderasyon Komutlarını Dinleyen ve Mikrofon Senkronizasyonu Yapan Bileşen
 export default function ModerationHandler({ 
@@ -27,6 +57,9 @@ export default function ModerationHandler({
 }) {
   const room = useRoomContext();
   const { localParticipant } = useLocalParticipant();
+  // Dinleyici oda başına BİR KEZ kurulur; güncel sunucu kimliği ref üzerinden okunur
+  const serverIdRef = useRef(serverId);
+  serverIdRef.current = serverId;
 
   // ✅ FIX v3.0: Sync Lock + Debounce + Pending State for race condition prevention
   const syncLockRef = useRef(false);
@@ -132,7 +165,7 @@ export default function ModerationHandler({
     hasRegisteredModerationRef.current = true;
     console.log("✅ Registering moderation event listener (ONCE)");
 
-    const handleDataReceived = (payload, participant) => {
+    const handleDataReceived = (payload, participant, _kind, _topic, verified = false) => {
       // Sadece debugging için log ekleyelim
       if (process.env.NODE_ENV === "development") {
         console.log("📨 Veri alındı:", participant?.identity);
@@ -141,6 +174,17 @@ export default function ModerationHandler({
       try {
         const data = JSON.parse(str);
         if (data.type === "MODERATION_COMMAND") {
+          // Odadaki HERKES veri mesajı gönderebilir: komutu uygulamadan önce gönderenin (LiveKit'in doğruladığı
+          // kimlik, mesajın içindeki ad değil) bu sunucuda gerçekten yetkili olduğunu doğrula.
+          if (!verified && data.targetId === localParticipant.identity) {
+            senderHasPermission(serverIdRef.current, participant?.identity, COMMAND_PERMISSION[data.action])
+              .then((ok) => {
+                if (ok) handleDataReceived(payload, participant, _kind, _topic, true);
+                else console.warn("Yetkisiz moderasyon komutu yok sayıldı:", data.action, participant?.identity);
+              })
+              .catch(() => {});
+            return;
+          }
           if (process.env.NODE_ENV === "development") {
             console.log("🛠️ Moderasyon komutu:", data.action, "Hedef:", data.targetId, "Sen:", localParticipant.identity);
           }

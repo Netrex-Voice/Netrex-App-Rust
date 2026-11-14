@@ -39,33 +39,22 @@ import MessageContextMenu from "@/src/components/ChatView/MessageContextMenu";
 import { popularEmojis } from "@/src/components/ChatView/constants";
 import Modal from "@/src/components/ui/Modal";
 import Button from "@/src/components/ui/Button";
+import { useShallow } from "zustand/react/shallow";
 
 // Durum noktası ve etiketi: "boşta" ve "rahatsız etme" da çevrimiçi sayılır (eskiden hepsi "çevrimdışı" görünüyordu)
 const PRESENCE_DOT = { online: "bg-green-500", idle: "bg-yellow-500", dnd: "bg-red-500" };
 const PRESENCE_LABEL = { online: "Çevrimiçi", idle: "Boşta", dnd: "Rahatsız Etme" };
 
 export default function DMConversation({ onBack, onStartCall }) {
-  const { user } = useAuthStore();
-  const {
-    activeConversation,
-    messages,
-    isLoading,
-    isLoadingOlder,
-    hasMoreMessages,
-    sendMessage,
-    loadOlderMessages,
-    deleteMessage,
-    editMessage,
-    deleteMessageSequence,
-    toggleReaction,
-    users: realTimeUsers,
-    typingUsers,
-    sendTypingStatus,
-    clearActiveConversation
-  } = useDMStore();
+  const user = useAuthStore((s) => s.user);
+  const { activeConversation, messages, isLoading, isLoadingOlder, hasMoreMessages, sendMessage, loadOlderMessages, deleteMessage, editMessage, deleteMessageSequence, toggleReaction, realTimeUsers, typingUsers, sendTypingStatus, clearActiveConversation } = useDMStore(
+    useShallow((s) => ({ activeConversation: s.activeConversation, messages: s.messages, isLoading: s.isLoading, isLoadingOlder: s.isLoadingOlder, hasMoreMessages: s.hasMoreMessages, sendMessage: s.sendMessage, loadOlderMessages: s.loadOlderMessages, deleteMessage: s.deleteMessage, editMessage: s.editMessage, deleteMessageSequence: s.deleteMessageSequence, toggleReaction: s.toggleReaction, realTimeUsers: s.users, typingUsers: s.typingUsers, sendTypingStatus: s.sendTypingStatus, clearActiveConversation: s.clearActiveConversation })),
+  );
 
-  const { removeFriend, blockUserById, unblockUser, friends, blockedUsers } = useFriendStore();
-  const { members } = useServerStore();
+  const { removeFriend, blockUserById, unblockUser, friends, blockedUsers } = useFriendStore(
+    useShallow((s) => ({ removeFriend: s.removeFriend, blockUserById: s.blockUserById, unblockUser: s.unblockUser, friends: s.friends, blockedUsers: s.blockedUsers })),
+  );
+  const members = useServerStore((s) => s.members);
   const room = useOptionalRoomContext();
 
   const [inputText, setInputText] = useState("");

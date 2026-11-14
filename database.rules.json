@@ -1,12 +1,19 @@
 {
   "rules": {
     "room_presence": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      "$room": {
+        ".read": "auth != null",
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "!newData.exists() || (newData.hasChildren(['userId']) && newData.child('userId').val() === auth.uid)"
+        }
+      }
     },
     "user_voice_state": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
     },
     "user_presence": {
       "$uid": {

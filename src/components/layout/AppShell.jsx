@@ -45,6 +45,8 @@ export default function AppShell({
   onToggleFriendsMode,
   onOpenCreateModal,
   messengerBadge = 0,
+  // Gezinme anahtarı: değişince (kanala/odaya/konuşmaya geçildi) açık mobil çekmeceler kapanır
+  mobileNavKey = "",
 }) {
 
   const [isElectron, setIsElectron] = useState(false);
@@ -54,6 +56,11 @@ export default function AppShell({
   // 📱 Mobile drawer states
   const [mobileServerDrawer, setMobileServerDrawer] = useState(false);
   const [mobileChannelDrawer, setMobileChannelDrawer] = useState(false);
+  // Bir kanala / odaya / konuşmaya geçilince çekmeceler kapansın (kullanıcı seçtiği şeyi görsün)
+  useEffect(() => {
+    setMobileChannelDrawer(false);
+    setMobileServerDrawer(false);
+  }, [mobileNavKey]);
   const mobileMemberDrawerOpen = useServerStore(state => state.mobileMemberDrawerOpen);
   const setMobileMemberDrawerOpen = useServerStore(state => state.setMobileMemberDrawerOpen);
   // ── Sunucu değişince üye paneli "Üye listesini gizle"ye basılmış gibi kapanır, içerik kapalıyken değişir,
@@ -339,6 +346,9 @@ export default function AppShell({
             onGoHome={onGoHome}
             onToggleFriendsMode={onToggleFriendsMode}
             onOpenServers={() => setMobileServerDrawer(true)}
+            // Kanal listesi (sunucu) ya da konuşma listesi (mesajlar): odadayken/sohbetteyken de ulaşılabilir
+            onOpenSidebar={sidebar ? () => setMobileChannelDrawer(true) : null}
+            sidebarLabel={friendsMode ? "Sohbetler" : "Kanallar"}
             onOpenMembers={() => setMobileMemberDrawerOpen(true)}
             onOpenSettings={() => setSettingsOpen(true)}
             messengerBadge={messengerBadge}
@@ -359,6 +369,20 @@ export default function AppShell({
               onCreateServer={onOpenCreateModal}
               onClose={() => setMobileServerDrawer(false)}
             />
+          </MobileDrawer>
+
+          {/* Kanal / konuşma listesi çekmecesi (masaüstündeki sol kenar çubuğunun aynısı) */}
+          <MobileDrawer
+            isOpen={mobileChannelDrawer && !!sidebar}
+            onClose={() => setMobileChannelDrawer(false)}
+            side="left"
+            title=""
+            showCloseButton={false}
+            width="86vw"
+            maxWidth="340px"
+          >
+            <div className="flex-1 min-h-0">{sidebar}</div>
+            {sidebarFooter}
           </MobileDrawer>
 
           {/* Member List Drawer */}

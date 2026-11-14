@@ -16,11 +16,13 @@ import {
   where,
   onSnapshot,
   documentId,
+  limit,
 } from "firebase/firestore";
 import { Virtuoso } from "react-virtuoso";
 import ServerMemberListSkeleton from "@/src/components/server/skeletons/ServerMemberListSkeleton";
 import { useRtdbPresenceWatch } from "@/src/lib/rtdbPresence";
 import { useShallow } from "zustand/react/shallow";
+import { primeAvatars } from "@/src/store/avatarStore";
 
 // İki üye nesnesi yüzeysel olarak aynı mı? Aynıysa eski referans korunur ve MemberItem'ın memo'su işe yarar.
 function shallowEqualObj(a, b) {
@@ -183,6 +185,7 @@ export default function ServerMemberList({ onClose }) {
       const q = query(
         collection(db, "users"),
         where(documentId(), "in", chunkIds),
+        limit(CHUNK_SIZE), // kurallar toplu dökümü engellemek için listelemede en çok 30 belgeye izin verir
       );
 
       unsubscribes.push(
@@ -203,6 +206,8 @@ export default function ServerMemberList({ onClose }) {
               };
             });
             Object.entries(profiles).forEach(([id, p]) => PROFILE_CACHE.set(id, p));
+            // Avatarlar bu dinleyicinin zaten okuduğu adresi kullansın (kullanıcı başına ayrı okuma olmasın)
+            primeAvatars(Object.fromEntries(Object.entries(profiles).map(([id, p]) => [id, p.photoURL])));
             chunkProfiles[chunkIndex] = profiles;
             if (!chunkLoaded[chunkIndex]) {
               chunkLoaded[chunkIndex] = true;
